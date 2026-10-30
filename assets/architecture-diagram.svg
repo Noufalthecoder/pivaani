@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 520" width="100%" height="100%">
+  <defs>
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141824"/>
+      <stop offset="100%" stop-color="#0B0D14"/>
+    </linearGradient>
+    <linearGradient id="gateGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B"/>
+      <stop offset="100%" stop-color="#0F172A"/>
+    </linearGradient>
+    <linearGradient id="glowLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="50%" stop-color="#00F5D4"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+    <filter id="boxGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1100" height="520" rx="16" fill="#07090E" stroke="#1E293B" stroke-width="1.5"/>
+
+  <!-- Title -->
+  <text x="50" y="50" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="22" font-weight="800" fill="#F8FAFC" letter-spacing="-0.5">
+    Pi Vaani · High-Concurrency Deterministic Architecture
+  </text>
+  <text x="50" y="74" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="13" font-weight="500" fill="#64748B">
+    End-to-End lifecycle of an ambiguous/pending UPI payment across Voice, Edge Lock &amp; Graph Fraud Engine
+  </text>
+
+  <!-- Flow Steps -->
+  <!-- STEP 1: Customer Phone -->
+  <g transform="translate(50, 110)">
+    <rect width="200" height="200" rx="14" fill="url(#cardBg)" stroke="#334155" stroke-width="1.5"/>
+    <rect x="0" y="0" width="200" height="36" rx="14" fill="#1E293B"/>
+    <circle cx="20" cy="18" r="5" fill="#38BDF8"/>
+    <text x="35" y="22" font-family="sans-serif" font-size="12" font-weight="700" fill="#F1F5F9">1. Customer Payer</text>
+
+    <!-- Details -->
+    <text x="16" y="65" font-family="sans-serif" font-size="12" font-weight="600" fill="#94A3B8">Payer App (UPI)</text>
+    <text x="16" y="85" font-family="sans-serif" font-size="11" font-weight="400" fill="#64748B">• PhonePe / GPay / Paytm</text>
+    <text x="16" y="105" font-family="sans-serif" font-size="11" font-weight="400" fill="#64748B">• Customer VPA @upi</text>
+    <text x="16" y="125" font-family="sans-serif" font-size="11" font-weight="400" fill="#64748B">• Debited ₹40 (Pending)</text>
+
+    <!-- Rapid Tap warning box -->
+    <rect x="12" y="145" width="176" height="42" rx="8" fill="#450A0A" stroke="#EF4444" stroke-width="1"/>
+    <text x="22" y="162" font-family="sans-serif" font-size="10.5" font-weight="700" fill="#F87171">Retap Vulnerability</text>
+    <text x="22" y="177" font-family="sans-serif" font-size="9.5" fill="#FCA5A5">Repeated clicks &lt;10ms</text>
+  </g>
+
+  <!-- Arrow 1 to 2 with Distributed Lock badge -->
+  <g transform="translate(250, 200)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="url(#glowLine)" stroke-width="3"/>
+    <polygon points="60,0 52,-5 52,5" fill="#00F5D4"/>
+    <rect x="5" y="-22" width="50" height="16" rx="4" fill="#0F172A" stroke="#00F5D4" stroke-width="1"/>
+    <text x="12" y="-10" font-family="monospace" font-size="9" fill="#00F5D4" font-weight="700">&lt;10ms</text>
+  </g>
+
+  <!-- STEP 2: Concurrency & In-Flight Lock -->
+  <g transform="translate(310, 110)">
+    <rect width="210" height="200" rx="14" fill="url(#cardBg)" stroke="#00F5D4" stroke-width="1.5" filter="url(#boxGlow)"/>
+    <rect x="0" y="0" width="210" height="36" rx="14" fill="#0D2E2B"/>
+    <circle cx="20" cy="18" r="5" fill="#00F5D4"/>
+    <text x="35" y="22" font-family="sans-serif" font-size="12" font-weight="700" fill="#F1F5F9">2. Idempotency Lock</text>
+
+    <text x="16" y="65" font-family="monospace" font-size="11" font-weight="700" fill="#38BDF8">asyncio.Lock() Manager</text>
+    <text x="16" y="85" font-family="sans-serif" font-size="11" fill="#94A3B8">• Key: SHA256(VPA+Amt+Tx)</text>
+    <text x="16" y="105" font-family="sans-serif" font-size="11" fill="#94A3B8">• In-Flight Collision Guard</text>
+
+    <rect x="12" y="125" width="186" height="60" rx="8" fill="#061E23" stroke="#10B981" stroke-width="1"/>
+    <text x="20" y="145" font-family="sans-serif" font-size="10.5" font-weight="700" fill="#10B981">HTTP 429 Shield</text>
+    <text x="20" y="162" font-family="sans-serif" font-size="9.5" fill="#A7F3D0">"Concurrency Block: Duplicate</text>
+    <text x="20" y="174" font-family="sans-serif" font-size="9.5" fill="#A7F3D0">request detected in-flight."</text>
+  </g>
+
+  <!-- Arrow 2 to 3 -->
+  <g transform="translate(520, 200)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="url(#glowLine)" stroke-width="3"/>
+    <polygon points="60,0 52,-5 52,5" fill="#00F5D4"/>
+  </g>
+
+  <!-- STEP 3: 7-Gate Safety Firewall & Fraud Graph -->
+  <g transform="translate(580, 110)">
+    <rect width="250" height="200" rx="14" fill="url(#cardBg)" stroke="#F59E0B" stroke-width="1.5"/>
+    <rect x="0" y="0" width="250" height="36" rx="14" fill="#2E200D"/>
+    <circle cx="20" cy="18" r="5" fill="#F59E0B"/>
+    <text x="35" y="22" font-family="sans-serif" font-size="12" font-weight="700" fill="#F1F5F9">3. 7-Gate Safety Firewall</text>
+
+    <!-- The 7 gates mini checklist -->
+    <g transform="translate(16, 50)" font-family="monospace" font-size="10" fill="#E2E8F0">
+      <text y="14"><tspan fill="#10B981">✓</tspan> Gate 1: Authority (Dial Policy)</text>
+      <text y="28"><tspan fill="#10B981">✓</tspan> Gate 2: Amount (₹ Threshold)</text>
+      <text y="42"><tspan fill="#10B981">✓</tspan> Gate 3: Confidence Score</text>
+      <text y="56"><tspan fill="#F43F5E">⚠</tspan> Gate 4: Identity (Fraud Graph)</text>
+      <text y="70"><tspan fill="#10B981">✓</tspan> Gate 5: Idempotency Key</text>
+      <text y="84"><tspan fill="#10B981">✓</tspan> Gate 6: Reversibility Check</text>
+      <text y="98"><tspan fill="#10B981">✓</tspan> Gate 7: Merchant Pin Approval</text>
+    </g>
+
+    <!-- Fraud Graph Callout -->
+    <rect x="12" y="162" width="226" height="28" rx="6" fill="#1C1917" stroke="#F43F5E" stroke-width="1"/>
+    <text x="20" y="180" font-family="sans-serif" font-size="10" font-weight="700" fill="#FB7185">
+      NetworkX Graph · Collusion Watch
+    </text>
+  </g>
+
+  <!-- Arrow 3 to 4 -->
+  <g transform="translate(830, 200)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="url(#glowLine)" stroke-width="3"/>
+    <polygon points="60,0 52,-5 52,5" fill="#10B981"/>
+  </g>
+
+  <!-- STEP 4: Dual Channel Resolution -->
+  <g transform="translate(890, 110)">
+    <rect width="160" height="200" rx="14" fill="url(#cardBg)" stroke="#10B981" stroke-width="1.5"/>
+    <rect x="0" y="0" width="160" height="36" rx="14" fill="#064E3B"/>
+    <circle cx="20" cy="18" r="5" fill="#10B981"/>
+    <text x="35" y="22" font-family="sans-serif" font-size="12" font-weight="700" fill="#F1F5F9">4. Dual Channel</text>
+
+    <!-- Soundbox Voice -->
+    <rect x="12" y="50" width="136" height="58" rx="8" fill="#0B132B" stroke="#38BDF8" stroke-width="1"/>
+    <text x="20" y="70" font-family="sans-serif" font-size="11" font-weight="700" fill="#38BDF8">Pi Vaani Voice</text>
+    <text x="20" y="86" font-family="sans-serif" font-size="9" fill="#94A3B8">"₹40 Pending... Bharosa</text>
+    <text x="20" y="98" font-family="sans-serif" font-size="9" fill="#94A3B8">Protected. Do not retap."</text>
+
+    <!-- Tamper Proof Audit Log -->
+    <rect x="12" y="122" width="136" height="66" rx="8" fill="#1C1917" stroke="#F59E0B" stroke-width="1"/>
+    <text x="20" y="142" font-family="sans-serif" font-size="10.5" font-weight="700" fill="#F59E0B">Audit Hash Chain</text>
+    <text x="20" y="158" font-family="monospace" font-size="8.5" fill="#E2E8F0">hash(H_prev | Evt)</text>
+    <text x="20" y="172" font-family="monospace" font-size="8" fill="#10B981">verify_chain() = TRUE</text>
+  </g>
+
+  <!-- Bottom Bar: Live WebSocket Synchronizer -->
+  <g transform="translate(50, 340)">
+    <rect width="1000" height="140" rx="12" fill="#0B0F19" stroke="#1E293B" stroke-width="1"/>
+    
+    <g transform="translate(24, 25)">
+      <circle cx="6" cy="6" r="6" fill="#10B981" filter="url(#boxGlow)"/>
+      <text x="24" y="11" font-family="sans-serif" font-size="13" font-weight="800" fill="#F8FAFC">
+        Real-Time WebSocket Hub (ws://localhost:8000/ws) &amp; Case State Machine (1000ms loop)
+      </text>
+      
+      <!-- Event Flow Blocks -->
+      <g transform="translate(0, 30)">
+        <!-- Evt 1 -->
+        <rect x="0" y="0" width="180" height="48" rx="8" fill="#131B2E" stroke="#2563EB" stroke-width="1"/>
+        <text x="12" y="20" font-family="monospace" font-size="10" font-weight="700" fill="#60A5FA">PAYMENT_CREATED</text>
+        <text x="12" y="36" font-family="sans-serif" font-size="9" fill="#94A3B8">Payer Phone enters Pending</text>
+
+        <!-- Evt 2 -->
+        <rect x="200" y="0" width="180" height="48" rx="8" fill="#2E1B13" stroke="#F97316" stroke-width="1"/>
+        <text x="212" y="20" font-family="monospace" font-size="10" font-weight="700" fill="#FB923C">CASE_OPENED</text>
+        <text x="212" y="36" font-family="sans-serif" font-size="9" fill="#94A3B8">PV-1001 assigned in 2s</text>
+
+        <!-- Evt 3 -->
+        <rect x="400" y="0" width="180" height="48" rx="8" fill="#2A1215" stroke="#E11D48" stroke-width="1"/>
+        <text x="412" y="20" font-family="monospace" font-size="10" font-weight="700" fill="#FB7185">RETAP_DETECTED</text>
+        <text x="412" y="36" font-family="sans-serif" font-size="9" fill="#94A3B8">429 Concurrency Block</text>
+
+        <!-- Evt 4 -->
+        <rect x="600" y="0" width="180" height="48" rx="8" fill="#1E102E" stroke="#A855F7" stroke-width="1"/>
+        <text x="612" y="20" font-family="monospace" font-size="10" font-weight="700" fill="#C084FC">FRAUD_RING_DETECTED</text>
+        <text x="612" y="36" font-family="sans-serif" font-size="9" fill="#94A3B8">Graph rings isolated</text>
+
+        <!-- Evt 5 -->
+        <rect x="800" y="0" width="150" height="48" rx="8" fill="#0C251C" stroke="#059669" stroke-width="1"/>
+        <text x="812" y="20" font-family="monospace" font-size="10" font-weight="700" fill="#34D399">PAYMENT_UPDATED</text>
+        <text x="812" y="36" font-family="sans-serif" font-size="9" fill="#94A3B8">Success auto-closes case</text>
+      </g>
+    </g>
+  </g>
+</svg>
