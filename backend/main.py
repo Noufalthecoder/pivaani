@@ -13,6 +13,7 @@ from models import Merchant, Policy, Payment, Case, Action, AuditEvent
 from audit import record_audit_event, verify_chain
 from events import manager, broadcast
 from cases import start_case_monitor, stop_case_monitor
+from fraud_graph import fraud_detector
 from routers.sandbox_api import router as sandbox_router
 import schemas
 
@@ -176,6 +177,9 @@ async def reset_state(db: Session = Depends(get_db)):
         db.query(Payment).delete()
         db.query(AuditEvent).delete()
         db.commit()
+
+        # Reset in-memory fraud graph
+        fraud_detector.reset()
 
         # Reset or re-create Merchant Ravi
         merchant = db.query(Merchant).filter(Merchant.name == settings.DEFAULT_MERCHANT_NAME).first()
