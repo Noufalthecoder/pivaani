@@ -10,10 +10,17 @@ __v0_jsx-dev-runtime.ts
 # Environment variables
 .env*.local
 
-# Common ignores
-node_modules
-.next/
-.DS_Store
-*.db
-__pycache__/
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/.DS_Store
+
+# Backend (Python)
+backend/__pycache__/
+backend/*.pyc
+backend/pivaani.db
+backend/*.db
+
+# General
+*.DS_Store
 *.pyc
