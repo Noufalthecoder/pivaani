@@ -143,6 +143,15 @@ export default function Demo() {
         appendLog('firewall', 'Duplicate tap detected -> Idempotency Gate Active')
         break
 
+      case 'FRAUD_RING_DETECTED':
+        setCustomerCaption(`🚨 Security Alert: Graph Fraud Ring detected for ${payload.customer_vpa} across ${payload.merchant_count} merchants`)
+        appendLog('firewall', `🚨 FRAUD_RING_DETECTED: ${payload.customer_vpa} (${payload.merchant_count} merchants linked)`)
+        break
+
+      case 'APPROVAL_PROCESSED':
+        appendLog('merchant', `Approval processed for ${payload.case_id} (${payload.status})`)
+        break
+
       case 'STATE_RESET':
         setPaymentStatus('IDLE')
         setCurrentPayment(null)
@@ -230,16 +239,37 @@ export default function Demo() {
     }
   }
 
-  // 6. API Action: Retap
+  // 6. API Action: Retap (Concurrency Lock protected)
   const handleRetap = async () => {
     try {
-      await fetch(`${BACKEND_HTTP}/api/sandbox/retap`, {
+      const res = await fetch(`${BACKEND_HTTP}/api/sandbox/retap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_id: currentPayment?.id })
       })
+      if (res.status === 429) {
+        const data = await res.json()
+        setCustomerCaption(`🔒 ${data.detail || 'Concurrency Block: In-flight duplicate rejected'}`)
+        appendLog('firewall', '🔒 HTTP 429: Concurrency Block (Distributed Lock)')
+      }
     } catch (err) {
       appendLog('system', `Retap error: ${err.message}`)
+    }
+  }
+
+  // 6b. API Action: Simulate Collusive Fraud Ring
+  const handleSimulateFraudRing = async () => {
+    appendLog('attack', '🚨 Simulating collusive fraud ring: attacker@upi across 4 merchants...')
+    try {
+      const res = await fetch(`${BACKEND_HTTP}/api/sandbox/simulate-fraud-ring?customer_vpa=attacker@upi`, {
+        method: 'POST'
+      })
+      if (res.ok) {
+        const data = await res.json()
+        appendLog('firewall', `Graph Detector flagged ${data.customer_vpa} (4 merchants connected)`)
+      }
+    } catch (err) {
+      appendLog('system', `Fraud ring test error: ${err.message}`)
     }
   }
 
@@ -1085,6 +1115,20 @@ export default function Demo() {
               </span>
               <span className="text-[10px] font-mono text-[#8E95A5] mt-1 leading-tight">
                 Mimic merchant approval
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSimulateFraudRing}
+              className="flex flex-col items-start p-3 rounded-xl border text-left transition-all hover:border-[#EF4444] hover:bg-[#1C1F28] cursor-pointer group border-[#EF4444]/40"
+              style={{ backgroundColor: '#0A0B0F' }}
+            >
+              <span className="text-xs font-semibold text-red-400 transition-colors">
+                Attack: Fraud Ring (Collusion)
+              </span>
+              <span className="text-[10px] font-mono text-[#8E95A5] mt-1 leading-tight">
+                Trigger NetworkX graph fraud
               </span>
             </button>
 
