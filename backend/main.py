@@ -15,6 +15,9 @@ from events import manager, broadcast
 from cases import start_case_monitor, stop_case_monitor
 from fraud_graph import fraud_detector
 from routers.sandbox_api import router as sandbox_router
+from routers.attack_api import router as attack_router
+from fastapi.staticfiles import StaticFiles
+import os
 import schemas
 
 # Setup structured logging
@@ -104,8 +107,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Sandbox Scenarios Router
+# Include Sandbox Scenarios & Attacks Routers
 app.include_router(sandbox_router)
+app.include_router(attack_router)
+
+# Mount static audio files
+static_audio_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(static_audio_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_audio_dir), name="static")
 
 # -------------------------------------------------------------
 # 1. WEBSOCKET ROUTE
