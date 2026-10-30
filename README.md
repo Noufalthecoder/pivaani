@@ -15,7 +15,7 @@
 
 <br/>
 
-### **Bharosa Layer for UPI · பீரவாணி**
+### **Bharosa Layer for UPI**
 *Deterministic Real-time Voice Soundbox · 7-Gate Safety Firewall · In-Flight Distributed Idempotency Locks · NetworkX Graph Fraud Ring Detection*
 
 <br/>
@@ -58,7 +58,7 @@ Every day across India, over **450 Million UPI transactions** take place. When a
 3. **Merchant Anxiety**: The merchant hears nothing from their traditional soundbox, assumes no payment, and disputes with the customer.
 4. **Fraud Ring Exploitation**: Fraudsters exploit the 3-minute bank settlement window to trigger collusive retaps and chargeback scams across multiple merchants.
 
-**Pi Vaani (பீரவாணி)** solves this at the edge by inserting a **deterministic safety layer between the customer, merchant soundbox, and banking switches**.
+**Pi Vaani** solves this at the edge by inserting a **deterministic safety layer between the customer, merchant soundbox, and banking switches**.
 
 ---
 
@@ -314,11 +314,13 @@ curl http://localhost:8000/api/audit/verify
 
 Built with pride by **ImpactMinds**:
 
-- **Mohammed Noufal V** — *Core Architecture, Deterministic Engine & Full-Stack Systems*
+- **Mohammed Noufal V** — *Core Architecture, Deterministic Engine & Backend Systems*
+- **Kavindra K** — *Distributed Systems & Safety Protocol Engineering*
+- **Gowri Maha** — *Frontend Architecture & Real-Time Dashboard Systems*
 - **ImpactMinds Research Lab** — *Fintech Protocol Design & Fraud Graph Modeling*
 
 ---
 
 <div align="center">
-  <sub>Pi Vaani (பீரவாணி) · Deterministic Payment Trust for India's Next 500 Million Digital Citizens.</sub>
+  <sub>Pi Vaani · Deterministic Payment Trust for India's Next 500 Million Digital Citizens.</sub>
 </div>

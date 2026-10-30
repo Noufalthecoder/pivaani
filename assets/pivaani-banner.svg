@@ -129,8 +129,8 @@
         Pi Vaani
       </text>
       <!-- Sub-tag glowing orange -->
-      <text x="270" y="-12" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="28" font-weight="800" fill="url(#fireGrad)" filter="url(#softGlow)">
-        · பீரவாணி
+      <text x="270" y="-12" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="800" fill="url(#fireGrad)" filter="url(#softGlow)" letter-spacing="1">
+        · TRUST PROTOCOL
       </text>
       <!-- Subtitle -->
       <text y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="20" font-weight="500" fill="#38BDF8" letter-spacing="0.2">
@@ -221,3 +221,4 @@
     </g>
   </g>
 </svg>
+
