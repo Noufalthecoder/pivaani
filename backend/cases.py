@@ -6,9 +6,10 @@ from sqlalchemy.orm import Session
 
 from config import settings
 from db import SessionLocal
-from models import Payment, Case
+from models import Payment, Case, Merchant
 from audit import record_audit_event
 from events import broadcast
+from fraud_graph import fraud_detector
 
 logger = logging.getLogger("pivaani.cases")
 
@@ -95,7 +96,28 @@ async def check_and_create_stuck_cases(db: Session) -> List[Case]:
             payload=case_payload
         )
 
-        # 2. Broadcast real-time WebSocket event to soundbox and merchant UI
+        # 2. Update Graph Fraud Detector with Customer <-> Merchant incident edge
+        merchant = db.query(Merchant).filter(Merchant.id == payment.merchant_id).first()
+        merchant_vpa = merchant.vpa if merchant else "ravi.chai@upi"
+
+        is_new_fraud, fraud_data = fraud_detector.add_stuck_payment_incident(
+            customer_vpa=payment.payer_vpa,
+            merchant_vpa=merchant_vpa,
+            case_id=case.id,
+            timestamp=case.created_at
+        )
+
+        if is_new_fraud and fraud_data:
+            logger.warning(f"🚨 FRAUD RING DETECTED for {payment.payer_vpa}! Logging audit event.")
+            record_audit_event(
+                db=db,
+                event_type="FRAUD_RING_DETECTED",
+                actor="system",
+                payload=fraud_data
+            )
+            await broadcast("FRAUD_RING_DETECTED", fraud_data)
+
+        # 3. Broadcast real-time WebSocket event to soundbox and merchant UI
         await broadcast("CASE_OPENED", case_payload)
         newly_opened_cases.append(case)
 
