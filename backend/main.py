@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 from config import settings
 from db import Base, engine, get_db, SessionLocal
 from models import Merchant, Policy, Payment, Case, Action, AuditEvent
-from audit import record_audit_event, verify_chain
-from events import manager, broadcast
-from cases import start_case_monitor, stop_case_monitor
+from audit import record_audit_event, verify_chain, install_append_only_guards
+from events import manager, broadcast, start_event_dispatcher, stop_event_dispatcher
+from cases import start_case_monitor, stop_case_monitor, ACTIVE_CASE_STATUSES
+from security import hash_pin, is_pin_hashed, nonce_store, pin_limiter
 from fraud_graph import fraud_detector
 from routers.sandbox_api import router as sandbox_router
 from routers.attack_api import router as attack_router
+from routers.voice_api import router as voice_router
 from fastapi.staticfiles import StaticFiles
 import os
 import schemas
@@ -36,7 +38,7 @@ def seed_database(db: Session):
             vpa=settings.DEFAULT_MERCHANT_VPA,
             phone=settings.DEFAULT_MERCHANT_PHONE,
             trust_dial=settings.DEFAULT_TRUST_DIAL,
-            pin=settings.DEFAULT_MERCHANT_PIN,
+            pin=hash_pin(settings.DEFAULT_MERCHANT_PIN),
             created_at=datetime.utcnow()
         )
         db.add(merchant)
@@ -76,12 +78,19 @@ async def lifespan(app: FastAPI):
     """FastAPI Lifespan handler for startup database initialization, seeding, and background monitor"""
     logger.info("Initializing database schema...")
     Base.metadata.create_all(bind=engine)
+    install_append_only_guards(engine)
     db = SessionLocal()
     try:
         seed_database(db)
+        # Older databases stored the PIN in plain text: hash it in place
+        for merchant in db.query(Merchant).all():
+            if not is_pin_hashed(merchant.pin):
+                merchant.pin = hash_pin(merchant.pin)
+        db.commit()
     finally:
         db.close()
-    
+
+    start_event_dispatcher()
     # Start the Case State Machine background monitor (checks every 1s)
     start_case_monitor()
     logger.info("Case State Machine background monitor initialized.")
@@ -89,6 +98,7 @@ async def lifespan(app: FastAPI):
     yield
 
     stop_case_monitor()
+    stop_event_dispatcher()
     logger.info("Application shutting down.")
 
 app = FastAPI(
@@ -110,6 +120,7 @@ app.add_middleware(
 # Include Sandbox Scenarios & Attacks Routers
 app.include_router(sandbox_router)
 app.include_router(attack_router)
+app.include_router(voice_router)
 
 # Mount static audio files
 static_audio_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -174,7 +185,8 @@ def get_health(db: Session = Depends(get_db)):
 async def reset_state(db: Session = Depends(get_db)):
     """
     Resets the sandbox database state back to initial seed baseline:
-    - Clears active cases, actions, payments, and audit history.
+    - Clears cases, actions and payments. The audit chain is append-only and is kept;
+      the reset itself is recorded in it.
     - Resets Merchant 'Ravi' trust dial to 'balanced' and PIN to '4321'.
     - Records state reset into audit hash chain.
     - Broadcasts reset to connected WebSockets.
@@ -184,17 +196,18 @@ async def reset_state(db: Session = Depends(get_db)):
         db.query(Action).delete()
         db.query(Case).delete()
         db.query(Payment).delete()
-        db.query(AuditEvent).delete()
         db.commit()
 
-        # Reset in-memory fraud graph
+        # Reset in-memory fraud graph, approval nonces and PIN lockouts
         fraud_detector.reset()
+        nonce_store.reset()
+        pin_limiter.reset()
 
         # Reset or re-create Merchant Ravi
         merchant = db.query(Merchant).filter(Merchant.name == settings.DEFAULT_MERCHANT_NAME).first()
         if merchant:
             merchant.trust_dial = settings.DEFAULT_TRUST_DIAL
-            merchant.pin = settings.DEFAULT_MERCHANT_PIN
+            merchant.pin = hash_pin(settings.DEFAULT_MERCHANT_PIN)
             db.commit()
             db.refresh(merchant)
         else:
@@ -233,7 +246,7 @@ def get_state(db: Session = Depends(get_db)):
     """
     merchant = db.query(Merchant).filter(Merchant.name == settings.DEFAULT_MERCHANT_NAME).first()
     payments = db.query(Payment).order_by(Payment.created_at.desc()).limit(20).all()
-    active_cases = db.query(Case).filter(Case.status.in_(["OPEN", "EVALUATING"])).all()
+    active_cases = db.query(Case).filter(Case.status.in_(ACTIVE_CASE_STATUSES)).all()
     latest_audit = db.query(AuditEvent).order_by(AuditEvent.id.desc()).first()
 
     active_dial = merchant.trust_dial if merchant else settings.DEFAULT_TRUST_DIAL

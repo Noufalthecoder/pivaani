@@ -21,45 +21,87 @@ AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file_
 # Valid Sarvam AI speakers (priya / kavya / rahul / meera fallback)
 DEFAULT_SPEAKER = "priya"
 
-# Templates for Hindi, Tamil, and English
+# Templates for Hindi, Tamil, and English.
+# Spoken lines use {case_ref} ("PV 1001", easier for TTS); receipts use {case_id}.
 TEMPLATES: Dict[str, Dict[str, str]] = {
     "hi-IN": {
-        "payment_pending": "रुपये {amount} बैंक में लंबित हैं। भरोसा सुरक्षा सक्रिय है, दोबारा भुगतान न करें।",
+        "customer_reassure": "आपका रुपये {amount} का भुगतान प्रोसेस हो रहा है। केस {case_ref}। कृपया दोबारा भुगतान न करें।",
+        "merchant_case_opened": "रुपये {amount} का भुगतान लंबित है। केस {case_ref} खोला गया। ग्राहक को रुकने के लिए कहें।",
+        "customer_retap_blocked": "आपका दूसरा भुगतान रोक दिया गया। आपसे दो बार पैसा नहीं लिया जाएगा।",
+        "merchant_approval_needed": "रुपये {amount} के रिफंड के लिए आपकी मंज़ूरी चाहिए। केस {case_ref}। मंज़ूरी के साथ अपना पिन बोलें।",
+        "approval_rejected": "मंज़ूरी अस्वीकार। पिन गलत है या यह अनुरोध मर्चेंट का नहीं है।",
+        "customer_refunded": "आपके रुपये {amount} वापस भेज दिए गए हैं। केस {case_ref}। पैसा जल्द ही आपके खाते में आ जाएगा।",
+        "merchant_refund_done": "रिफंड पूरा। रुपये {amount} ग्राहक को वापस भेज दिए गए। केस {case_ref}।",
+        "refund_blocked": "रिफंड रोका गया। सुरक्षा जांच पूरी नहीं हुई।",
         "payment_success": "{merchant} को रुपये {amount} सफलतापूर्वक प्राप्त हुए।",
-        "fraud_blocked": "चेतावनी! फ्रॉड रिंग का पता चला। यह लेन-देन तुरंत रोक दिया गया है।",
-        "authority_blocked": "अस्वीकृत! अनधिकृत वॉइस रिफंड अनुरोध को अथॉरिटी गेट ने रोक दिया।",
-        "amount_exceeded": "रुपये {amount} सुरक्षा सीमा से अधिक है। मर्चेंट पिन सत्यापन आवश्यक है।",
-        "confidence_failed": "कम विश्वास स्कोर। सुरक्षा के लिए लेन-देन रोक दिया गया।",
-        "idempotency_blocked": "डुप्लीकेट रिटैप अवरुद्ध। केवल एक बार शुल्क लिया जाएगा।",
-        "spoof_blocked": "वॉइस बायोमेट्रिक बेमेल। पहचान गेट द्वारा अनुरोध खारिज कर दिया गया।"
+        "fraud_blocked": "चेतावनी! फ्रॉड रिंग पैटर्न मिला। ऑटो रिफंड रोककर मैनुअल जांच के लिए भेजा गया।",
+        "authority_blocked": "अस्वीकृत! ग्राहक के नोट से आया रिफंड आदेश अथॉरिटी गेट ने रोक दिया।",
+        "amount_exceeded": "रुपये {amount} पाँच हज़ार की सख्त सीमा से ज़्यादा है। रिफंड रोका गया।",
+        "confidence_failed": "कम विश्वास स्कोर। सुरक्षा के लिए रिफंड रोक दिया गया।",
+        "idempotency_blocked": "पुरानी मंज़ूरी दोबारा इस्तेमाल की गई। आइडेम्पोटेंसी गेट ने रोक दिया।",
+        "spoof_blocked": "केवल मर्चेंट ही रिफंड मंज़ूर कर सकता है। ग्राहक की आवाज़ अथॉरिटी गेट ने खारिज की।",
+        "receipt_refunded": "भरोसा रसीद · केस {case_id} · रुपये {amount} · रिफंड हो गया",
+        "receipt_confirmed": "भरोसा रसीद · केस {case_id} · रुपये {amount} · भुगतान सफल"
     },
     "ta-IN": {
-        "payment_pending": "ரூபாய் {amount} வங்கியில் நிலுவையில் உள்ளது. பரோசா பாதுகாப்பு இயங்குகிறது, மீண்டும் பணம் செலுத்த வேண்டாம்.",
+        "customer_reassure": "உங்கள் ரூபாய் {amount} கட்டணம் செயலாக்கத்தில் உள்ளது. கேஸ் {case_ref}. மீண்டும் பணம் செலுத்த வேண்டாம்.",
+        "merchant_case_opened": "ரூபாய் {amount} கட்டணம் நிலுவையில் உள்ளது. கேஸ் {case_ref} திறக்கப்பட்டது. வாடிக்கையாளரை காத்திருக்கச் சொல்லுங்கள்.",
+        "customer_retap_blocked": "உங்கள் இரண்டாவது கட்டணம் தடுக்கப்பட்டது. இரண்டு முறை பணம் எடுக்கப்படாது.",
+        "merchant_approval_needed": "ரூபாய் {amount} ரீஃபண்டுக்கு உங்கள் ஒப்புதல் தேவை. கேஸ் {case_ref}. ஒப்புதலுடன் உங்கள் பின் எண்ணைச் சொல்லுங்கள்.",
+        "approval_rejected": "ஒப்புதல் நிராகரிக்கப்பட்டது. பின் தவறு அல்லது இது வணிகரின் கோரிக்கை அல்ல.",
+        "customer_refunded": "உங்கள் ரூபாய் {amount} திருப்பி அனுப்பப்பட்டது. கேஸ் {case_ref}. விரைவில் உங்கள் கணக்கில் வரவு வைக்கப்படும்.",
+        "merchant_refund_done": "ரீஃபண்ட் முடிந்தது. ரூபாய் {amount} வாடிக்கையாளருக்கு திருப்பி அனுப்பப்பட்டது. கேஸ் {case_ref}.",
+        "refund_blocked": "ரீஃபண்ட் தடுக்கப்பட்டது. பாதுகாப்பு சோதனை தோல்வியடைந்தது.",
         "payment_success": "{merchant} அவர்களுக்கு ரூபாய் {amount} வெற்றிகரமாக பெறப்பட்டது.",
-        "fraud_blocked": "எச்சரிக்கை! மோசடி வளையம் கண்டறியப்பட்டது. இந்த பரிவர்த்தனை உடனடியாக தடுக்கப்பட்டது.",
-        "authority_blocked": "நிராகரிக்கப்பட்டது! அங்கீகரிக்கப்படாத குரல் கட்டளை அத்தாரிட்டி கேட் மூலம் தடுக்கப்பட்டது.",
-        "amount_exceeded": "தொகை ரூபாய் {amount} வரம்பை மீறியது. வணிகரின் பின் ஒப்புதல் தேவை.",
-        "confidence_failed": "குறைந்த நெட்வொர்க் நம்பிக்கை மதிப்பு. பரிவர்த்தனை நிறுத்தி வைக்கப்பட்டுள்ளது.",
-        "idempotency_blocked": "நகல் பரிவர்த்தனை தடுக்கப்பட்டது. ஒரு முறை மட்டுமே பிடித்தம் செய்யப்படும்.",
-        "spoof_blocked": "குரல் சரிபார்ப்பு தோல்வி. அடையாளம் கேட் மூலம் தடுக்கப்பட்டது."
+        "fraud_blocked": "எச்சரிக்கை! மோசடி வளைய முறை கண்டறியப்பட்டது. தானியங்கி ரீஃபண்ட் கைமுறை சரிபார்ப்புக்கு நிறுத்தப்பட்டது.",
+        "authority_blocked": "நிராகரிக்கப்பட்டது! வாடிக்கையாளர் குறிப்பில் வந்த ரீஃபண்ட் கட்டளை அத்தாரிட்டி கேட் மூலம் தடுக்கப்பட்டது.",
+        "amount_exceeded": "ரூபாய் {amount} ஐந்தாயிரம் உச்ச வரம்பை மீறுகிறது. ரீஃபண்ட் தடுக்கப்பட்டது.",
+        "confidence_failed": "குறைந்த நம்பிக்கை மதிப்பு. பாதுகாப்புக்காக ரீஃபண்ட் நிறுத்தப்பட்டது.",
+        "idempotency_blocked": "பழைய ஒப்புதல் மீண்டும் பயன்படுத்தப்பட்டது. ஐடெம்பொடென்சி கேட் தடுத்தது.",
+        "spoof_blocked": "வணிகர் மட்டுமே ரீஃபண்டை அங்கீகரிக்க முடியும். வாடிக்கையாளர் குரல் அத்தாரிட்டி கேட் மூலம் நிராகரிக்கப்பட்டது.",
+        "receipt_refunded": "பரோசா ரசீது · கேஸ் {case_id} · ரூபாய் {amount} · ரீஃபண்ட் முடிந்தது",
+        "receipt_confirmed": "பரோசா ரசீது · கேஸ் {case_id} · ரூபாய் {amount} · கட்டணம் வெற்றி"
     },
     "en-IN": {
-        "payment_pending": "Rupees {amount} pending with bank. Protected by Bharosa layer. Do not retap.",
+        "customer_reassure": "Your Rupees {amount} payment is processing. Case {case_ref}. Please do not pay again.",
+        "merchant_case_opened": "Rupees {amount} payment is pending. Case {case_ref} opened. Ask the customer to wait.",
+        "customer_retap_blocked": "Your second payment was blocked. You will not be charged twice.",
+        "merchant_approval_needed": "Refund of Rupees {amount} needs your approval. Case {case_ref}. Say approve with your PIN.",
+        "approval_rejected": "Approval rejected. Wrong PIN, or the request did not come from the merchant.",
+        "customer_refunded": "Your Rupees {amount} has been refunded. Case {case_ref}. It will reach your account shortly.",
+        "merchant_refund_done": "Refund complete. Rupees {amount} sent back to the customer. Case {case_ref}.",
+        "refund_blocked": "Refund blocked. Safety checks did not pass.",
         "payment_success": "Received Rupees {amount} successfully at {merchant}.",
-        "fraud_blocked": "Warning: Fraud ring detected. Transaction blocked by Identity Gate.",
-        "authority_blocked": "Declined: Unauthorized refund command blocked by Authority Gate.",
-        "amount_exceeded": "Rupees {amount} exceeds automated safety threshold. Merchant PIN required.",
-        "confidence_failed": "Low banking switch confidence score. Blocked by Confidence Gate.",
-        "idempotency_blocked": "Duplicate retap detected. Blocked by Idempotency Gate.",
-        "spoof_blocked": "Voice biometric mismatch. Blocked by Identity Gate."
+        "fraud_blocked": "Warning: fraud ring pattern detected. Auto-refund held for manual review.",
+        "authority_blocked": "Declined: a refund command from a customer note was blocked by the Authority Gate.",
+        "amount_exceeded": "Rupees {amount} exceeds the five thousand rupee hard ceiling. Refund blocked.",
+        "confidence_failed": "Low confidence score. Refund blocked by the Confidence Gate.",
+        "idempotency_blocked": "Replayed approval detected. Blocked by the Idempotency Gate.",
+        "spoof_blocked": "Only the merchant can approve refunds. Customer voice rejected by the Authority Gate.",
+        "receipt_refunded": "Bharosa Receipt · Case {case_id} · Rs {amount} · Refunded",
+        "receipt_confirmed": "Bharosa Receipt · Case {case_id} · Rs {amount} · Payment successful"
     }
 }
+
+class _BlankMissing(dict):
+    def __missing__(self, key):
+        return ""
+
+def spoken_case_ref(case_id: Optional[str]) -> str:
+    """'PV-1001' -> 'PV 1001' so TTS reads it as letters and a number"""
+    return (case_id or "").replace("-", " ")
 
 def get_template_text(template_key: str, lang: str = "hi-IN", **kwargs) -> str:
     """Returns formatted template text in the requested language"""
     lang_dict = TEMPLATES.get(lang, TEMPLATES["en-IN"])
     template = lang_dict.get(template_key, TEMPLATES["en-IN"].get(template_key, ""))
-    return template.format(**kwargs)
+    # Speak "40", not "40.0"
+    amount = kwargs.get("amount")
+    if isinstance(amount, float) and amount.is_integer():
+        kwargs["amount"] = int(amount)
+    if "case_id" in kwargs and "case_ref" not in kwargs:
+        kwargs["case_ref"] = spoken_case_ref(kwargs["case_id"])
+    return template.format_map(_BlankMissing(kwargs))
 
 async def generate_tts(text: str, lang: str = "hi-IN") -> Optional[str]:
     """

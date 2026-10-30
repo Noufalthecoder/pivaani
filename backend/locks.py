@@ -42,6 +42,12 @@ class IdempotencyLockManager:
             logger.debug(f"🔑 Acquired lock for key {key[:12]}...")
             return True
 
+    def lock_for(self, key: str) -> asyncio.Lock:
+        """Blocking variant: `async with lock_manager.lock_for(key)` serializes callers instead of rejecting them"""
+        if key not in self._locks:
+            self._locks[key] = asyncio.Lock()
+        return self._locks[key]
+
     def release(self, key: str):
         """
         Releases the lock for the given key if currently held.

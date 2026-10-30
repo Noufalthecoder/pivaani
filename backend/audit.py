@@ -1,12 +1,44 @@
 import hashlib
+import hmac
 import json
+import os
+import secrets
 import uuid
 from datetime import datetime
 from typing import Dict, Any, Tuple
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from models import AuditEvent
 
 GENESIS_HASH = "0" * 64
+
+# Key that signs the chain head. Set AUDIT_SIGNING_KEY in production; for local
+# runs a random key is generated once and kept next to the database.
+_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".audit_signing_key")
+
+def _signing_key() -> bytes:
+    env_key = os.getenv("AUDIT_SIGNING_KEY", "").strip()
+    if env_key:
+        return env_key.encode("utf-8")
+    if not os.path.exists(_KEY_FILE):
+        with open(_KEY_FILE, "w") as f:
+            f.write(secrets.token_hex(32))
+    with open(_KEY_FILE) as f:
+        return f.read().strip().encode("utf-8")
+
+def sign_head(latest_hash: str, total_events: int) -> str:
+    """HMAC over the chain head: rewriting history and recomputing hashes no longer verifies without the key"""
+    return hmac.new(_signing_key(), f"{total_events}:{latest_hash}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+def install_append_only_guards(engine) -> None:
+    """SQLite triggers that make audit_events append-only: UPDATE and DELETE abort"""
+    with engine.begin() as conn:
+        for op in ("UPDATE", "DELETE"):
+            conn.execute(text(
+                f"CREATE TRIGGER IF NOT EXISTS audit_events_no_{op.lower()} "
+                f"BEFORE {op} ON audit_events "
+                f"BEGIN SELECT RAISE(ABORT, 'audit_events is append-only'); END;"
+            ))
 
 def canonical_json(data: Any) -> str:
     """Produces deterministic, canonical JSON string for hashing"""
@@ -116,6 +148,7 @@ def verify_chain(db: Session) -> Dict[str, Any]:
         "total_events": len(events),
         "genesis_hash": events[0].event_hash,
         "latest_hash": events[-1].event_hash,
+        "head_signature": sign_head(events[-1].event_hash, len(events)),
         "message": f"All {len(events)} hash links verified successfully"
     }
 

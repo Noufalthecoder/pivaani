@@ -31,7 +31,6 @@ class MerchantOut(BaseModel):
     vpa: str
     phone: Optional[str] = None
     trust_dial: str
-    pin: str
     created_at: datetime
     policies: List[PolicyOut] = []
 
@@ -115,6 +114,7 @@ class ChainVerificationOut(BaseModel):
     genesis_hash: Optional[str] = None
     latest_hash: Optional[str] = None
     broken_at_id: Optional[int] = None
+    head_signature: Optional[str] = None
     reason: Optional[str] = None
     message: Optional[str] = None
 

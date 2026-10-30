@@ -7,8 +7,14 @@ __v0_jsx-dev-runtime.ts
 .v0-trash/
 .vercel/
 
-# Environment variables
+# Environment variables (API keys)
+.env
 .env*.local
+backend/.env
+
+# Backend secrets and generated files
+backend/.audit_signing_key
+backend/static/audio/
 
 # Frontend (Next.js)
 frontend/node_modules/
@@ -26,4 +32,3 @@ backend/*.db
 *.pyc
 
 .next/
-
