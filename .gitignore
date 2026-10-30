@@ -24,3 +24,6 @@ backend/*.db
 # General
 *.DS_Store
 *.pyc
+
+.next/
+
