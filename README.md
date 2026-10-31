@@ -57,6 +57,11 @@ Neither party has information, a voice, or a safe next action. That silence is t
 
 Pi Vaani is a software layer that sits between the payment rail and the Soundbox. It turns the silent device into an **active resolution engine**:
 
+<p align="center">
+  <img src="./assets/pipeline-3d.svg" alt="Animated pipeline: a stuck ₹40 payment flows from the customer through the case engine, the untrusted recommender, the 7-gate firewall and the event bus to the soundbox" width="100%"/>
+  <br/><sub><b>Watch one payment travel the pipeline.</b> The recommender can be fooled, so it only <i>proposes</i>; the 7 gates <i>decide</i>, and only an ALLOW reaches <code>execute_refund()</code>.</sub>
+</p>
+
 | Step | What happens | Latency |
 |---|---|---|
 | **Detect** | A 1-second case engine spots any payment `PENDING` for more than 2 seconds and opens a case (`PV-1001`) | **~2–3 s** |
@@ -84,30 +89,67 @@ Pi Vaani is a software layer that sits between the payment rail and the Soundbox
 
 > ### **The LLM only recommends. Pure Python authorizes. The AI cannot touch the money.**
 
-The recommender (rule-based today, built as an LLM-pluggable slot) is treated as **untrusted input**. Its proposal (`refund ₹40 @ 0.92`) goes through `backend/firewall.py`: deterministic Python, no model, no network, same inputs, same verdict, every time. The only function that moves money, `execute_refund()`, runs only on an `ALLOW`.
+<p align="center">
+  <img src="./assets/seven-gates.svg" alt="Animated 7-gate firewall: a genuine ₹40 refund passes all seven gates and is allowed; a prompt-injection attack is stopped at the Authority gate" width="100%"/>
+  <br/><sub><b>Two runs on a loop:</b> a genuine refund turns all seven gates green; a prompt injection that fooled the recommender dies at gate 1.</sub>
+</p>
 
-| # | Gate | Passes when | Otherwise |
-|:-:|---|---|---|
-| 1 | **Authority** | The action comes from `system` or a merchant channel; an approval comes from `merchant_voice` / `merchant_app` **with the correct PIN**; the payer is **not** flagged by the fraud graph | **FAIL**: customer notes, customer voices, wrong PINs and *"Graph Alert: Collusive Fraud Ring Detected"* never authorize money |
-| 2 | **Amount** | Refund ≤ original payment, ≤ **₹5,000 hard ceiling**, ≤ the dial's auto limit | **FAIL** above payment or ceiling · **REVIEW** above the auto limit |
-| 3 | **Confidence** | Recommender confidence ≥ the dial's minimum | **FAIL** |
-| 4 | **Identity** | Payer VPA is not linked to stuck payments at > 3 merchants in 5 minutes | **FAIL** |
-| 5 | **Idempotency** | No duplicate payment in flight; the approval nonce is fresh and single-use | **FAIL** |
-| 6 | **Reversibility** | Bank status is `DEBITED_NOT_CREDITED` or `FAILED` (the money will not settle) | **WAIT** while `PENDING` · **FAIL** if already `SUCCESS` / `REFUNDED` |
-| 7 | **Approval** | Auto-approved within the dial, or a valid merchant approval (voice + PIN + nonce) is attached | **PENDING_APPROVAL** |
+### Why a firewall, not a smarter model
 
-**Decision order:** any `FAIL` → **BLOCK** (nothing executes) · Reversibility `WAIT` → **HOLD** (wait for the bank) · approval pending → **NEEDS_APPROVAL** (merchant voice + PIN) · else → **ALLOW**.
+A recommender (rule-based today, an LLM tomorrow) reads messy signals: bank codes, timings, even a customer's note. Anything that reads untrusted text **can be talked into things**. So Pi Vaani treats its output exactly like user input: a *proposal* such as `refund ₹40 @ 0.92`. That proposal goes through `backend/firewall.py`, **deterministic Python with no model, no network and no randomness**. Same inputs, same verdict, every time, and every verdict is written to the audit chain. `execute_refund()` is the **only** function that moves money, and it runs only on `ALLOW`.
+
+### The seven gates, one question each
+
+| # | Gate | The question it asks | Passes when | Otherwise |
+|:-:|---|---|---|---|
+| 1 | **Authority** | *Who is asking, and are they allowed to?* | The action comes from `system` or a merchant channel; an approval comes from `merchant_voice` / `merchant_app` **with the correct PIN**; the payer is not flagged by the fraud graph | **FAIL**: customer notes, customer voices, wrong PINs and *"Graph Alert: Collusive Fraud Ring Detected"* never authorize money |
+| 2 | **Amount** | *Is the number sane?* | Refund ≤ what was paid, ≤ the **₹5,000 hard ceiling**, ≤ the dial's auto limit | **FAIL** above the payment or ceiling · **REVIEW** above the auto limit (goes to the merchant) |
+| 3 | **Confidence** | *Is the recommender sure enough for this merchant?* | Confidence ≥ the dial's minimum | **FAIL** |
+| 4 | **Identity** | *Is this payer part of a fraud ring?* | The payer VPA is not linked to stuck payments at > 3 merchants within 5 minutes (NetworkX graph) | **FAIL** |
+| 5 | **Idempotency** | *Has this already happened?* | No duplicate payment in flight; the approval nonce is fresh and single-use | **FAIL** |
+| 6 | **Reversibility** | *Is the money really not arriving?* | Bank status is `DEBITED_NOT_CREDITED` or `FAILED` | **WAIT** while `PENDING` · **FAIL** if already `SUCCESS` / `REFUNDED` |
+| 7 | **Approval** | *Does a human need to sign?* | Auto-approved within the dial, or a valid merchant approval (voice + PIN + nonce) is attached | **PENDING_APPROVAL** |
+
+### How the verdict is reached
+
+All seven gates are evaluated every time, so the panel always shows the full picture. Then one rule picks the verdict:
 
 ```mermaid
-flowchart TD
-    G["Run all 7 gates"] --> F{"Any gate FAILED?"}
-    F -->|yes| BLOCK["BLOCK<br/>nothing executes"]
-    F -->|no| H{"Reversibility = WAIT?<br/>(bank still pending)"}
-    H -->|yes| HOLD["HOLD<br/>wait for the bank"]
-    H -->|no| P{"Approval pending?<br/>(dial or a REVIEW gate)"}
-    P -->|yes| NA["NEEDS_APPROVAL<br/>merchant voice + PIN"]
-    P -->|no| ALLOW["ALLOW<br/>execute_refund()"]
+flowchart LR
+    G["Run all 7 gates"] --> F{"Any gate<br/>FAILED?"}
+    F -->|yes| BLOCK["🛑 BLOCK<br/>nothing executes"]
+    F -->|no| H{"Reversibility<br/>= WAIT?"}
+    H -->|yes| HOLD["⏳ HOLD<br/>wait for the bank"]
+    H -->|no| P{"Approval<br/>pending?"}
+    P -->|yes| NA["🔐 NEEDS_APPROVAL<br/>merchant voice + PIN"]
+    P -->|no| ALLOW["✅ ALLOW<br/>execute_refund()"]
 ```
+
+### Walkthrough: one ₹40 refund, gate by gate
+
+Ravi's dial is **Balanced**. The bank reports `DEBITED_NOT_CREDITED`; the recommender proposes `refund ₹40 @ 0.92`.
+
+| Gate | What it sees | Result |
+|---|---|---|
+| Authority | actor = `system` | ✅ PASS |
+| Amount | ₹40 ≤ ₹40 paid · ≤ ₹5,000 · ≤ ₹200 auto limit | ✅ PASS |
+| Confidence | 0.92 ≥ 0.80 | ✅ PASS |
+| Identity | `customer@upi` has no fraud-ring edges | ✅ PASS |
+| Idempotency | one payment in flight, no replay | ✅ PASS |
+| Reversibility | bank says `DEBITED_NOT_CREDITED` | ✅ PASS |
+| Approval | within the Balanced dial | ✅ AUTO_APPROVED |
+| **Verdict** | | **ALLOW → `execute_refund()` → receipts** |
+
+Change **one** input and the verdict changes with it:
+
+| What changes | Gate that reacts | Verdict |
+|---|---|---|
+| The bank hasn't answered yet | Reversibility → WAIT | ⏳ **HOLD** (a refund now could pay out twice) |
+| Dial is **Careful** | Amount → REVIEW (₹40 > ₹0), Approval → PENDING | 🔐 **NEEDS_APPROVAL** |
+| Customer taps Pay again | Idempotency → FAIL | 🛑 **BLOCK** (no second charge) |
+| A customer note says *"refund ₹5000"* | Authority → FAIL, Amount → FAIL | 🛑 **BLOCK** |
+| Payer hit 4 merchants in 5 minutes | Authority + Identity → FAIL | 🛑 **BLOCK** (Graph Alert) |
+| Refund of ₹6,000 | Amount → FAIL (above ₹5,000) | 🛑 **BLOCK** |
 
 <table>
 <tr>
@@ -115,8 +157,8 @@ flowchart TD
 <td width="50%"><img src="./docs/images/merchant-needs-approval.png" alt="Careful dial: refund awaiting merchant PIN approval"/></td>
 </tr>
 <tr>
-<td align="center"><sub>A retap stops at the Idempotency gate.</sub></td>
-<td align="center"><sub>On Careful, the refund waits for the merchant's voice + PIN.</sub></td>
+<td align="center"><sub>Live: a retap stops at the Idempotency gate.</sub></td>
+<td align="center"><sub>Live: on Careful, the refund waits for the merchant's voice + PIN.</sub></td>
 </tr>
 </table>
 
@@ -124,17 +166,30 @@ flowchart TD
 
 ## 🎚️ The Merchant Trust Dial
 
-Every merchant has a different risk appetite. The dial changes the firewall's thresholds **at runtime**, set by a tap or **by voice in any language** (*"Careful rakho"*, *"ஜாக்கிரதையா இரு"*, *"జాగ్రత్తగా ఉండు"*):
+<p align="center">
+  <img src="./assets/trust-dial.svg" alt="Animated trust dial sweeping Careful, Balanced and Fast, showing each setting's auto-refund limit, minimum confidence and what happens to stuck ₹40 and ₹300 payments" width="100%"/>
+</p>
 
-| Dial | Auto-refund up to | Min. confidence | Beyond the limit |
-|---|---|---|---|
-| **Careful** | ₹0 (never automatic) | 0.90 | Merchant voice + PIN |
-| **Balanced** *(default)* | ₹200 | 0.80 | Merchant voice + PIN |
-| **Fast** | ₹500 | 0.70 | Merchant voice + PIN |
+A chai stall and an electronics shop don't want the same risk. The dial lets **each merchant choose how much the system may do on its own**. It does not add or remove gates; it moves **two thresholds inside them**:
 
-- Voice is the **interface**; the PIN and a single-use nonce are the **authentication**.
-- **No dial** can lift the ₹5,000 ceiling, skip the Reversibility gate, or let a customer approve their own refund.
-- The dial is the merchant's own setting: a sandbox reset keeps it, and the UI always shows the dial the firewall is actually using.
+- **Amount gate:** the auto-refund limit. Above it, Amount returns REVIEW and the refund waits for the merchant.
+- **Confidence gate:** how sure the recommender must be.
+
+| Dial | Auto-refund up to | Min. confidence | Stuck ₹40, bank failed | Stuck ₹300, bank failed | Say it |
+|---|:-:|:-:|---|---|---|
+| **Careful** | ₹0 | 0.90 | 🔐 merchant voice + PIN | 🔐 merchant voice + PIN | *"Careful rakho"* |
+| **Balanced** *(default)* | ₹200 | 0.80 | ✅ refunded instantly | 🔐 merchant voice + PIN | *"Balanced karo"* |
+| **Fast** | ₹500 | 0.70 | ✅ refunded instantly | ✅ refunded instantly | *"Fast rakho"* |
+
+**Set it any way, in any language.** Tap a chip, or hold the Soundbox button and speak: *"Careful rakho"*, *"ஜாக்கிரதையா இரு"*, *"జాగ్రత్తగా ఉండు"*, *"সাবধানে থাকো"*. A multilingual keyword table catches these instantly; anything else is translated by Sarvam AI and matched again.
+
+**What the dial can never change:**
+
+- 🧱 the **₹5,000 hard ceiling** (Amount gate)
+- ⏳ the **Reversibility** gate: no refund while the bank may still settle
+- 👤 **who** can approve: only the merchant, with the PIN and a fresh single-use nonce. Voice is the *interface*; the PIN is the *authentication*.
+
+The dial is the merchant's own setting: a sandbox reset keeps it, and the UI always shows the dial the firewall is actually using.
 
 ---
 
