@@ -60,7 +60,7 @@ Pi Vaani is a software layer that sits between the payment rail and the Soundbox
 | Step | What happens | Latency |
 |---|---|---|
 | **Detect** | A 1-second case engine spots any payment `PENDING` for more than 2 seconds and opens a case (`PV-1001`) | **~2–3 s** |
-| **Speak** | The Soundbox tells the **customer in Hindi** *"आपका पैसा सुरक्षित है… कृपया दोबारा भुगतान न करें"* (your money is safe, don't pay again) and the **merchant in Tamil** that a case is open, with the amount and case ID | instant |
+| **Speak** | The Soundbox speaks every line **in English first, then Hindi**: the customer hears *"Your money is safe… please do not pay again"* / *"आपका पैसा सुरक्षित है… कृपया दोबारा भुगतान न करें"*, and the merchant hears that a case is open, with the amount and case ID | instant |
 | **Block the retap** | A second tap returns the *same* payment (idempotency key = payer + merchant + amount), guarded by async locks: **five simultaneous taps create exactly one payment** | < 10 ms |
 | **Resolve** | When the bank answers, a recommender proposes an action and the **7-Gate Firewall** decides: confirm, auto-refund, hold for the merchant's voice + PIN, or block | instant |
 | **Prove** | Every step lands in a SHA-256 hash-chained, append-only, HMAC-signed audit trail, and both parties get a *Bharosa receipt* in their own language | instant |
@@ -220,7 +220,7 @@ sequenceDiagram
     C->>API: POST /api/sandbox/pay {amount: 40}
     Note over CE: pending > 2s
     CE->>BUS: CASE_OPENED PV-1001
-    CE->>BUS: SPEAK hi-IN (customer) · SPEAK ta-IN (merchant)
+    CE->>BUS: SPEAK en-IN → hi-IN (customer), then en-IN → hi-IN (merchant)
     BUS-->>SB: voice queue, ring amber
     C->>API: taps Pay again
     API-->>C: same payment (Idempotency gate FAIL, no new charge)
@@ -235,7 +235,7 @@ sequenceDiagram
         M->>API: voice "Refund kar do 4321" + nonce
         API->>FW: re-evaluate with approval → ALLOW
     end
-    CE->>BUS: CASE_RESOLVED + Bharosa receipts (hi + ta)
+    CE->>BUS: CASE_RESOLVED + Bharosa receipts (hi + en)
 ```
 
 ---
@@ -290,8 +290,9 @@ Edit `backend/.env`:
 
 ```ini
 SARVAM_API_KEY=your_sarvam_key_here   # empty = offline browser speech
-CUSTOMER_VOICE_LANG=hi-IN             # customer announcements
-MERCHANT_VOICE_LANG=ta-IN             # merchant announcements
+CUSTOMER_VOICE_LANG=hi-IN             # customer receipt language
+VOICE_LANGS=en-IN,hi-IN               # every line, in this order
+MERCHANT_VOICE_LANG=en-IN             # merchant receipt language
 DETECT_AFTER_SECONDS=2                # pending time before a case opens
 ```
 
@@ -318,9 +319,9 @@ Open **http://localhost:3000/demo** (landing page at `/`). Keep **one** tab open
 
 ### 5. Run the 60-second demo
 
-1. **Pay ₹40** (or type any amount) on the phone, then take your hands off. In ~2–3 s: **Case PV-1001** appears, the Soundbox ring turns **amber**, the Hindi then Tamil voice plays, and the audit trail prints `CASE_OPENED`.
+1. **Pay ₹40** (or type any amount) on the phone, then take your hands off. In ~2–3 s: **Case PV-1001** appears, the Soundbox ring turns **amber**, each line plays in English, then Hindi, and the audit trail prints `CASE_OPENED`.
 2. Tap **Pay again (retap)**: the Idempotency gate turns red. Still one payment.
-3. Case card → **Debited, not credited**: on Balanced, ₹40 auto-refunds and Bharosa receipts appear in Hindi and Tamil.
+3. Case card → **Debited, not credited**: on Balanced, ₹40 auto-refunds and Bharosa receipts appear in Hindi and English.
 4. Say *"Careful rakho"* (or tap **Careful**), pay again, and fail it: now the refund **waits** for *"Refund kar do 4321"* or the PIN `4321`.
 5. Press <kbd>C</kbd> and fire the six attacks. Then **Verify integrity**: the chain is valid and signed.
 
@@ -328,7 +329,8 @@ Open **http://localhost:3000/demo** (landing page at `/`). Keep **one** tab open
 |---|---|---|
 | `SARVAM_API_KEY` | *(empty)* | Sarvam TTS + STT + translate |
 | `DEMO_SCRIPTED` | `0` | `1` forces browser speech even with a key |
-| `CUSTOMER_VOICE_LANG` / `MERCHANT_VOICE_LANG` | `hi-IN` / `ta-IN` | Announcement languages (`hi-IN`, `ta-IN`, `en-IN`) |
+| `VOICE_LANGS` | `en-IN,hi-IN` | Languages every soundbox line is spoken in, in order (`ta-IN` also supported) |
+| `CUSTOMER_VOICE_LANG` / `MERCHANT_VOICE_LANG` | `hi-IN` / `en-IN` | Bharosa receipt languages |
 | `DETECT_AFTER_SECONDS` | `2` | Pending time before a case opens |
 | `AUDIT_SIGNING_KEY` | *(random local key)* | HMAC key for the audit head signature |
 | `DATABASE_URL` | `sqlite:///backend/pivaani.db` | Database location |

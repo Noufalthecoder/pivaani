@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -22,9 +22,12 @@ class Settings:
     # Stuck payment detection threshold in seconds
     DETECT_AFTER_SECONDS: int = int(os.getenv("DETECT_AFTER_SECONDS", "2"))
 
-    # Soundbox announcement languages when a stuck-payment Case opens
+    # Every soundbox line is spoken once per language, in this order (English first, then Hindi)
+    VOICE_LANGS: List[str] = [l.strip() for l in os.getenv("VOICE_LANGS", "en-IN,hi-IN").split(",") if l.strip()]
+
+    # Bharosa receipt languages
     CUSTOMER_VOICE_LANG: str = os.getenv("CUSTOMER_VOICE_LANG", "hi-IN")
-    MERCHANT_VOICE_LANG: str = os.getenv("MERCHANT_VOICE_LANG", "ta-IN")
+    MERCHANT_VOICE_LANG: str = os.getenv("MERCHANT_VOICE_LANG", "en-IN")
 
     # Dial Policy Configurations for the 7-Gate Safety Firewall
     POLICY_CONFIGS: Dict[str, Dict[str, Any]] = {

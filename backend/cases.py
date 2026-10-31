@@ -312,19 +312,20 @@ async def announce(
     reason: str = ""
 ):
     """
-    Broadcasts one SPEAK event per (audience, template_key), in order. Customer
-    lines use CUSTOMER_VOICE_LANG and merchant lines MERCHANT_VOICE_LANG; the
+    Broadcasts one SPEAK event per (audience, template_key, language), in order:
+    each line in every VOICE_LANGS language (English first, then Hindi). The
     soundbox client queues them so they play back-to-back.
     """
     try:
-        langs = [_audience_lang(audience) for audience, _ in items]
+        items = [(audience, key, lang) for audience, key in items for lang in settings.VOICE_LANGS]
+        langs = [lang for _, _, lang in items]
         texts = [
             get_template_text(key, lang=lang, amount=amount, merchant=merchant_name, case_id=case_id)
-            for (_, key), lang in zip(items, langs)
+            for _, key, lang in items
         ]
         # Synthesize all clips concurrently; None means the client falls back to browser speech
         audio_urls = await asyncio.gather(*(generate_tts(text, lang=lang) for text, lang in zip(texts, langs)))
-        for (audience, _), lang, text, audio_url in zip(items, langs, texts, audio_urls):
+        for (audience, _, _), lang, text, audio_url in zip(items, langs, texts, audio_urls):
             await broadcast("SPEAK", {
                 "text": text,
                 "audio_url": audio_url,
@@ -357,11 +358,11 @@ async def prewarm_case_announcements(amount: float = 40.0, case_id: str = "PV-10
     try:
         await asyncio.gather(*(
             generate_tts(
-                get_template_text(key, lang=_audience_lang(audience), amount=amount,
+                get_template_text(key, lang=lang, amount=amount,
                                   merchant=settings.DEFAULT_MERCHANT_BUSINESS, case_id=case_id),
-                lang=_audience_lang(audience)
+                lang=lang
             )
-            for audience, key in clips
+            for audience, key in clips for lang in settings.VOICE_LANGS
         ))
     except Exception as e:
         logger.warning(f"Could not prewarm case announcements: {e}")

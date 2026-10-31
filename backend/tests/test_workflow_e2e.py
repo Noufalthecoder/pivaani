@@ -75,8 +75,10 @@ async def main():
     check("pre-check is HOLD (bank may still settle)", pre and pre["decision"] == "HOLD", pre)
     await asyncio.sleep(3)
     speaks = take("SPEAK", case_id=cid)
-    check("2 voices, both name the case", len(speaks) == 2 and all(cid.replace("-", " ") in x["text"] for x in speaks),
-          [x["text"] for x in speaks])
+    check("4 voices (customer + merchant, English then Hindi), all name the case",
+          len(speaks) == 4 and all(cid.replace("-", " ") in x["text"] for x in speaks)
+          and [x["lang"] for x in speaks] == ["en-IN", "hi-IN", "en-IN", "hi-IN"],
+          [(x["lang"], x["text"]) for x in speaks])
 
     print("Phase 3: retap / duplicate pay")
     with ThreadPoolExecutor(3) as ex:
@@ -98,7 +100,7 @@ async def main():
     r = await wait_for("CASE_RESOLVED", case_id=cid)
     check("auto-refunded under Balanced (40 <= 200)", r and r["resolution"] == "REFUNDED", r)
     rc = await wait_for("RECEIPT", case_id=cid)
-    check("receipt issued in hi + ta", rc and rc["customer"]["lang"] == "hi-IN" and rc["merchant"]["lang"] == "ta-IN", rc)
+    check("receipt issued in hi + en", rc and rc["customer"]["lang"] == "hi-IN" and rc["merchant"]["lang"] == "en-IN", rc)
     call("POST", f"/api/sandbox/payments/{pay['id']}/state", {"status": "SUCCESS"})
     check("late credit after refund -> reconciliation alert", await wait_for("RECONCILIATION") is not None)
 

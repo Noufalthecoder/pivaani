@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -14,6 +15,7 @@ from events import broadcast
 from security import nonce_store
 from cases import current_policy, publish_gates
 from voice.sarvam import generate_tts, get_template_text
+from config import settings
 
 logger = logging.getLogger("pivaani.attack_api")
 
@@ -132,9 +134,12 @@ async def execute_attack(
     )
     executed = decision == "ALLOW"
 
-    speech_text = get_template_text(attack_def["template_key"], lang=lang, amount=payment.amount,
-                                    merchant=merchant.business_name)
-    audio_url = await generate_tts(speech_text, lang=lang)
+    # Spoken in every VOICE_LANGS language, English first then Hindi
+    voice_langs = settings.VOICE_LANGS or [lang]
+    speech_texts = [get_template_text(attack_def["template_key"], lang=l, amount=payment.amount,
+                                      merchant=merchant.business_name) for l in voice_langs]
+    audio_urls = await asyncio.gather(*(generate_tts(t, lang=l) for t, l in zip(speech_texts, voice_langs)))
+    speech_text = speech_texts[0]
 
     audit_event = record_audit_event(
         db=db,
@@ -153,13 +158,14 @@ async def execute_attack(
     )
 
     await publish_gates(kind, decision, gates, gate)
-    await broadcast("SPEAK", {
-        "text": speech_text,
-        "audio_url": audio_url,
-        "lang": lang,
-        "blocked": not executed,
-        "reason": gate or "All gates verified"
-    })
+    for text, l, audio_url in zip(speech_texts, voice_langs, audio_urls):
+        await broadcast("SPEAK", {
+            "text": text,
+            "audio_url": audio_url,
+            "lang": l,
+            "blocked": not executed,
+            "reason": gate or "All gates verified"
+        })
 
     return AttackResponse(
         attack_kind=kind,
