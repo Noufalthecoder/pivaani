@@ -1,0 +1,22 @@
+# Render blueprint for the Pi Vaani FastAPI backend (WebSockets + 1 s case monitor).
+# The Next.js frontend is deployed separately on Vercel (Root Directory: frontend).
+services:
+  - type: web
+    name: pivaani-api
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python -m uvicorn main:app --app-dir ./backend --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/voice/status
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.11
+      - key: SARVAM_API_KEY
+        sync: false          # paste your key in the Render dashboard; never commit it
+      - key: VOICE_LANGS
+        value: en-IN,hi-IN
+      - key: DETECT_AFTER_SECONDS
+        value: "2"
+      - key: AUDIT_SIGNING_KEY
+        generateValue: true
