@@ -25,7 +25,7 @@ DEFAULT_SPEAKER = "priya"
 # Spoken lines use {case_ref} ("PV 1001", easier for TTS); receipts use {case_id}.
 TEMPLATES: Dict[str, Dict[str, str]] = {
     "hi-IN": {
-        "customer_reassure": "आपका रुपये {amount} का भुगतान प्रोसेस हो रहा है। केस {case_ref}। कृपया दोबारा भुगतान न करें।",
+        "customer_reassure": "आपका पैसा सुरक्षित है। रुपये {amount} का भुगतान प्रोसेस हो रहा है। केस {case_ref}। कृपया दोबारा भुगतान न करें।",
         "merchant_case_opened": "रुपये {amount} का भुगतान लंबित है। केस {case_ref} खोला गया। ग्राहक को रुकने के लिए कहें।",
         "customer_retap_blocked": "आपका दूसरा भुगतान रोक दिया गया। आपसे दो बार पैसा नहीं लिया जाएगा।",
         "merchant_approval_needed": "रुपये {amount} के रिफंड के लिए आपकी मंज़ूरी चाहिए। केस {case_ref}। मंज़ूरी के साथ अपना पिन बोलें।",
@@ -33,6 +33,7 @@ TEMPLATES: Dict[str, Dict[str, str]] = {
         "customer_refunded": "आपके रुपये {amount} वापस भेज दिए गए हैं। केस {case_ref}। पैसा जल्द ही आपके खाते में आ जाएगा।",
         "merchant_refund_done": "रिफंड पूरा। रुपये {amount} ग्राहक को वापस भेज दिए गए। केस {case_ref}।",
         "refund_blocked": "रिफंड रोका गया। सुरक्षा जांच पूरी नहीं हुई।",
+        "customer_refund_review": "आपका पैसा सुरक्षित है। रुपये {amount} का केस {case_ref} जांच के लिए भेजा गया है। कृपया दोबारा भुगतान न करें।",
         "payment_success": "{merchant} को रुपये {amount} सफलतापूर्वक प्राप्त हुए।",
         "fraud_blocked": "चेतावनी! फ्रॉड रिंग पैटर्न मिला। ऑटो रिफंड रोककर मैनुअल जांच के लिए भेजा गया।",
         "authority_blocked": "अस्वीकृत! ग्राहक के नोट से आया रिफंड आदेश अथॉरिटी गेट ने रोक दिया।",
@@ -44,7 +45,7 @@ TEMPLATES: Dict[str, Dict[str, str]] = {
         "receipt_confirmed": "भरोसा रसीद · केस {case_id} · रुपये {amount} · भुगतान सफल"
     },
     "ta-IN": {
-        "customer_reassure": "உங்கள் ரூபாய் {amount} கட்டணம் செயலாக்கத்தில் உள்ளது. கேஸ் {case_ref}. மீண்டும் பணம் செலுத்த வேண்டாம்.",
+        "customer_reassure": "உங்கள் பணம் பாதுகாப்பாக உள்ளது. ரூபாய் {amount} கட்டணம் செயலாக்கத்தில் உள்ளது. கேஸ் {case_ref}. மீண்டும் பணம் செலுத்த வேண்டாம்.",
         "merchant_case_opened": "ரூபாய் {amount} கட்டணம் நிலுவையில் உள்ளது. கேஸ் {case_ref} திறக்கப்பட்டது. வாடிக்கையாளரை காத்திருக்கச் சொல்லுங்கள்.",
         "customer_retap_blocked": "உங்கள் இரண்டாவது கட்டணம் தடுக்கப்பட்டது. இரண்டு முறை பணம் எடுக்கப்படாது.",
         "merchant_approval_needed": "ரூபாய் {amount} ரீஃபண்டுக்கு உங்கள் ஒப்புதல் தேவை. கேஸ் {case_ref}. ஒப்புதலுடன் உங்கள் பின் எண்ணைச் சொல்லுங்கள்.",
@@ -52,6 +53,7 @@ TEMPLATES: Dict[str, Dict[str, str]] = {
         "customer_refunded": "உங்கள் ரூபாய் {amount} திருப்பி அனுப்பப்பட்டது. கேஸ் {case_ref}. விரைவில் உங்கள் கணக்கில் வரவு வைக்கப்படும்.",
         "merchant_refund_done": "ரீஃபண்ட் முடிந்தது. ரூபாய் {amount} வாடிக்கையாளருக்கு திருப்பி அனுப்பப்பட்டது. கேஸ் {case_ref}.",
         "refund_blocked": "ரீஃபண்ட் தடுக்கப்பட்டது. பாதுகாப்பு சோதனை தோல்வியடைந்தது.",
+        "customer_refund_review": "உங்கள் பணம் பாதுகாப்பாக உள்ளது. ரூபாய் {amount} கேஸ் {case_ref} சரிபார்ப்புக்கு அனுப்பப்பட்டது. மீண்டும் பணம் செலுத்த வேண்டாம்.",
         "payment_success": "{merchant} அவர்களுக்கு ரூபாய் {amount} வெற்றிகரமாக பெறப்பட்டது.",
         "fraud_blocked": "எச்சரிக்கை! மோசடி வளைய முறை கண்டறியப்பட்டது. தானியங்கி ரீஃபண்ட் கைமுறை சரிபார்ப்புக்கு நிறுத்தப்பட்டது.",
         "authority_blocked": "நிராகரிக்கப்பட்டது! வாடிக்கையாளர் குறிப்பில் வந்த ரீஃபண்ட் கட்டளை அத்தாரிட்டி கேட் மூலம் தடுக்கப்பட்டது.",
@@ -63,7 +65,7 @@ TEMPLATES: Dict[str, Dict[str, str]] = {
         "receipt_confirmed": "பரோசா ரசீது · கேஸ் {case_id} · ரூபாய் {amount} · கட்டணம் வெற்றி"
     },
     "en-IN": {
-        "customer_reassure": "Your Rupees {amount} payment is processing. Case {case_ref}. Please do not pay again.",
+        "customer_reassure": "Your money is safe. Your Rupees {amount} payment is processing. Case {case_ref}. Please do not pay again.",
         "merchant_case_opened": "Rupees {amount} payment is pending. Case {case_ref} opened. Ask the customer to wait.",
         "customer_retap_blocked": "Your second payment was blocked. You will not be charged twice.",
         "merchant_approval_needed": "Refund of Rupees {amount} needs your approval. Case {case_ref}. Say approve with your PIN.",
@@ -71,6 +73,7 @@ TEMPLATES: Dict[str, Dict[str, str]] = {
         "customer_refunded": "Your Rupees {amount} has been refunded. Case {case_ref}. It will reach your account shortly.",
         "merchant_refund_done": "Refund complete. Rupees {amount} sent back to the customer. Case {case_ref}.",
         "refund_blocked": "Refund blocked. Safety checks did not pass.",
+        "customer_refund_review": "Your money is safe. Your Rupees {amount} case {case_ref} has been sent for review. Please do not pay again.",
         "payment_success": "Received Rupees {amount} successfully at {merchant}.",
         "fraud_blocked": "Warning: fraud ring pattern detected. Auto-refund held for manual review.",
         "authority_blocked": "Declined: a refund command from a customer note was blocked by the Authority Gate.",

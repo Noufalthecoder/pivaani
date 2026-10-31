@@ -144,7 +144,7 @@ async def main():
 
     print("Phase 5: attacks")
     expect = {"refund_everything": ("BLOCK", "Authority"), "voice_spoof": ("BLOCK", "Authority"),
-              "fraud_ring": ("NEEDS_APPROVAL", "Identity"), "amount_bypass": ("BLOCK", "Amount"),
+              "fraud_ring": ("BLOCK", "Authority"), "amount_bypass": ("BLOCK", "Amount"),
               "low_confidence": ("BLOCK", "Confidence"), "replay_tap": ("BLOCK", "Idempotency")}
     for k, (d, gate) in expect.items():
         s, b = call("POST", f"/api/attack/{k}?lang=en-IN")

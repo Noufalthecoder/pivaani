@@ -207,7 +207,7 @@ async def block_case(db: Session, case: Case, payment: Payment, gate: str, gates
     await broadcast("CASE_RESOLVED", {
         "case_id": case.id, "resolution": "BLOCKED", "amount": payment.amount, "blocked_by": gate, "reason": reason
     })
-    schedule_announcement([("merchant", "refund_blocked")], amount=payment.amount,
+    schedule_announcement([("customer", "customer_refund_review"), ("merchant", "refund_blocked")], amount=payment.amount,
                           merchant_name=settings.DEFAULT_MERCHANT_BUSINESS, case_id=case.id,
                           blocked=True, reason=f"Refund blocked by {gate}")
 

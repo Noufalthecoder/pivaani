@@ -24,8 +24,12 @@ export default function CustomerPhone({
   soundboxSpeaking,
   caption,
   onPay,
-  onRetap
+  onRetap,
+  amountInput = '40',
+  onAmountChange = () => {},
+  paidAmount = 40
 }) {
+  const amount = Number(amountInput) || 0
   const pending = paymentStatus === 'PENDING'
   const processing = paymentStatus === 'PROCESSING'
   const confirmed = paymentStatus === 'CONFIRMED'
@@ -80,7 +84,7 @@ export default function CustomerPhone({
                 <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">
                   Case {activeCase.id} Opened
                 </p>
-                <p className="text-[26px] font-black text-[#0F172A] leading-tight">Amount: ₹{activeCase.amount ?? 40}</p>
+                <p className="text-[26px] font-black text-[#0F172A] leading-tight">Amount: ₹{activeCase.amount ?? paidAmount}</p>
                 <p
                   className={`text-[12px] font-medium mt-0.5 flex items-center justify-center gap-1.5 ${
                     soundboxSpeaking ? 'text-amber-700 animate-pulse' : 'text-amber-800/80'
@@ -122,10 +126,27 @@ export default function CustomerPhone({
                 ravi.chai@upi <ShieldCheck className="w-3.5 h-3.5 text-[#15803D]" />
               </p>
 
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-[#94A3B8]">Amount</p>
-              <p className="text-[64px] leading-none font-black tracking-tight text-[#0F172A]">
-                <span className="text-[34px] align-top mr-1 text-[#475569]">₹</span>40
-              </p>
+              {/* Editable amount; locked while a payment is in flight */}
+              <label htmlFor="pay-amount" className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-[#94A3B8]">
+                Amount (₹)
+              </label>
+              <div
+                className={`mt-1 flex items-center justify-center rounded-2xl px-3 transition-colors ${
+                  pending || processing ? '' : 'border-2 border-dashed border-[#CBD5E1] focus-within:border-[#FF5426] bg-[#F8FAFC]'
+                }`}
+              >
+                <span className="text-[34px] font-black text-[#475569] mr-1">₹</span>
+                <input
+                  id="pay-amount"
+                  type="text"
+                  inputMode="numeric"
+                  value={amountInput}
+                  disabled={pending || processing}
+                  onChange={(e) => onAmountChange(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-[170px] bg-transparent text-center text-[60px] leading-none font-black tracking-tight text-[#0F172A] outline-none disabled:opacity-100"
+                  aria-label="Amount in rupees"
+                />
+              </div>
 
               <div className="h-8 mt-3 flex items-center">
                 {pending && (
@@ -140,7 +161,7 @@ export default function CustomerPhone({
                 )}
                 {refunded && (
                   <span className="px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-[12px] font-semibold flex items-center gap-1.5">
-                    <RotateCcw className="w-3.5 h-3.5" /> Refunded · ₹40 returned
+                    <RotateCcw className="w-3.5 h-3.5" /> Refunded · ₹{paidAmount} returned
                   </span>
                 )}
               </div>
@@ -150,14 +171,18 @@ export default function CustomerPhone({
             <button
               type="button"
               onClick={pending ? onRetap : onPay}
-              disabled={processing}
-              className={`w-full h-14 rounded-2xl text-[17px] font-bold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:cursor-wait ${
+              disabled={processing || (!pending && amount < 1)}
+              className={`flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer disabled:cursor-wait ${
+                pending
+                  ? 'mx-auto w-auto h-9 px-4 rounded-xl text-[13px] font-bold text-white bg-amber-500 hover:bg-amber-600 shadow-[0_8px_18px_-8px_rgba(245,158,11,0.8)]'
+                  : 'w-full h-14 rounded-2xl text-[17px] font-bold text-white'
+              } ${
                 processing
                   ? 'bg-[#94A3B8]'
                   : confirmed
                   ? 'bg-[#16A34A] hover:bg-[#15803D] shadow-[0_10px_24px_-10px_rgba(22,163,74,0.8)]'
                   : pending
-                  ? 'bg-amber-500 hover:bg-amber-600 shadow-[0_10px_24px_-10px_rgba(245,158,11,0.8)]'
+                  ? ''
                   : 'bg-[#FF5426] hover:bg-[#E8461B] shadow-[0_10px_24px_-10px_rgba(255,84,38,0.8)]'
               }`}
             >
@@ -167,14 +192,14 @@ export default function CustomerPhone({
                 </>
               ) : confirmed ? (
                 <>
-                  <CheckCircle2 className="w-5 h-5" /> Paid ₹40 · Pay again
+                  <CheckCircle2 className="w-5 h-5" /> Paid ₹{paidAmount} · Pay ₹{amount} again
                 </>
               ) : pending ? (
                 <>
-                  <RefreshCw className="w-5 h-5" /> Pay Again (Retap)
+                  <RefreshCw className="w-3.5 h-3.5" /> Pay again (retap)
                 </>
               ) : (
-                'Pay ₹40'
+                `Pay ₹${amount}`
               )}
             </button>
 

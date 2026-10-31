@@ -9,7 +9,7 @@ from models import Payment, Case, Merchant
 from sandbox import create_mock_payment
 from audit import record_audit_event
 from events import broadcast
-from locks import lock_manager
+from locks import lock_manager, acquire_lock, release_lock, ConcurrencyError
 from fraud_graph import fraud_detector
 from firewall import evaluate_seven_gates
 from recommender import recommend
@@ -19,6 +19,7 @@ from cases import (
     execute_refund, block_case, confirm_payment, reconcile_late_bank_update, active_case_for
 )
 import schemas
+import time
 
 router = APIRouter(tags=["Sandbox Scenarios & Fraud Protection"])
 
@@ -28,7 +29,7 @@ UNRESOLVED_PAYMENT_STATUSES = ("PENDING", "DEBITED_NOT_CREDITED")
 
 # Request models
 class SandboxPayRequest(BaseModel):
-    amount: float = Field(default=40.0, description="Amount in INR")
+    amount: int = Field(default=40, ge=1, le=100000, description="Whole rupees, ₹1 to ₹1,00,000")
     scenario: str = Field(default="pending", description="Scenario type: pending, success")
     payer_vpa: Optional[str] = "customer@upi"
     payer_name: Optional[str] = "Customer"
@@ -56,6 +57,11 @@ class ApprovalRequest(BaseModel):
 # -------------------------------------------------------------
 # 1. PAY (idempotent per payer + merchant + amount)
 # -------------------------------------------------------------
+# Repeated taps are always blocked and audited, but the gate sweep + voice line play at
+# most once per window, so hammering the button does not stack animations and speech.
+RETAP_FEEDBACK_SECONDS = 4.0
+_last_retap_feedback: dict = {}
+
 async def _block_duplicate(db: Session, payment: Payment):
     """Phase 3: a second tap while the first payment is in flight is blocked, not charged"""
     merchant = db.query(Merchant).filter(Merchant.id == payment.merchant_id).first()
@@ -68,6 +74,11 @@ async def _block_duplicate(db: Session, payment: Payment):
     }
     record_audit_event(db=db, event_type="RETAP_BLOCKED", actor="customer", payload=event_payload)
     await broadcast("RETAP_DETECTED", event_payload)
+
+    now = time.monotonic()
+    if now - _last_retap_feedback.get(payment.id, 0.0) < RETAP_FEEDBACK_SECONDS:
+        return
+    _last_retap_feedback[payment.id] = now
 
     policy = current_policy(db, merchant)
     if policy:
@@ -149,7 +160,24 @@ async def sandbox_pay(payload: SandboxPayRequest, response: Response, db: Sessio
 
 @router.post("/api/sandbox/retap")
 async def sandbox_retap(payload: Optional[RetapRequest] = None, db: Session = Depends(get_db)):
-    """Customer taps Pay again for the payment that is still in flight"""
+    """
+    Customer taps Pay again for the payment that is still in flight.
+    Exclusive async lock first: of N simultaneous taps one is processed and the
+    rest get 429 instantly. The lock is released in `finally`, so it never sticks.
+    """
+    payment_id = (payload.payment_id if payload else None) or "latest"
+    lock_key = f"retap_{payment_id}"
+    try:
+        await acquire_lock(lock_key)
+    except ConcurrencyError:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Concurrency Block: this retap is already being processed")
+    try:
+        return await _retap(payload, db)
+    finally:
+        release_lock(lock_key)
+
+async def _retap(payload: Optional[RetapRequest], db: Session):
     query = db.query(Payment).filter(Payment.status.in_(UNRESOLVED_PAYMENT_STATUSES))
     if payload and payload.payment_id:
         query = query.filter(Payment.id == payload.payment_id)
@@ -319,7 +347,7 @@ async def simulate_fraud_ring(
     """
     Simulates a collusive fraud ring: stuck payments for one customer VPA across
     4 merchants within seconds. The customer is flagged and their refunds are
-    routed to manual review by the Identity gate.
+    blocked at the Authority gate (Graph Alert).
     """
     merchants = [
         "ravi.chai@upi",

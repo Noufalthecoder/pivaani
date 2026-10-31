@@ -1,9 +1,21 @@
 import asyncio
 import hashlib
 import logging
+import time
+from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
 logger = logging.getLogger("pivaani.locks")
+
+# A held lock older than this is treated as abandoned and taken over, so a crashed
+# request can never leave the Retap button locked for the rest of the demo.
+STALE_LOCK_SECONDS = 10.0
+
+class ConcurrencyError(Exception):
+    """Raised when another request already holds the lock for this key (maps to HTTP 429)"""
+    def __init__(self, key: str):
+        super().__init__(f"Concurrent request in flight for '{key}'")
+        self.key = key
 
 class IdempotencyLockManager:
     """
@@ -14,6 +26,7 @@ class IdempotencyLockManager:
     def __init__(self):
         self._locks: Dict[str, asyncio.Lock] = {}
         self._meta_lock = asyncio.Lock()
+        self.locks: Dict[str, float] = {}  # exclusive keys currently held -> acquired at (monotonic)
 
     @staticmethod
     def generate_key(identifier: str, action_type: str = "default") -> str:
@@ -61,6 +74,37 @@ class IdempotencyLockManager:
                 except RuntimeError as e:
                     logger.warning(f"Error releasing lock for key {key[:12]}: {e}")
 
+    async def acquire_lock(self, key: str) -> bool:
+        """
+        Non-blocking exclusive lock: the first caller gets it, every concurrent
+        caller gets ConcurrencyError immediately. Always pair with release_lock
+        (or use `async with lock_manager.exclusive(key)`).
+        """
+        async with self._meta_lock:
+            held_at = self.locks.get(key)
+            if held_at is not None and time.monotonic() - held_at < STALE_LOCK_SECONDS:
+                logger.warning(f"🔒 Concurrency block: '{key}' already held")
+                raise ConcurrencyError(key)
+            if held_at is not None:
+                logger.warning(f"⏱️ Stale lock '{key}' taken over after {STALE_LOCK_SECONDS:g}s")
+            self.locks[key] = time.monotonic()
+            return True
+
+    def release_lock(self, key: str):
+        self.locks.pop(key, None)
+
+    @asynccontextmanager
+    async def exclusive(self, key: str):
+        """`async with lock_manager.exclusive(key):` acquire or raise ConcurrencyError; always released"""
+        await self.acquire_lock(key)
+        try:
+            yield
+        finally:
+            self.release_lock(key)
+
+    def reset(self):
+        self.locks.clear()
+
 # Global singleton lock manager
 lock_manager = IdempotencyLockManager()
 
@@ -72,3 +116,10 @@ def release(key: str):
     """Utility wrapper for lock_manager.release"""
     lock_manager.release(key)
 
+
+async def acquire_lock(key: str) -> bool:
+    """Exclusive lock or ConcurrencyError (see IdempotencyLockManager.acquire_lock)"""
+    return await lock_manager.acquire_lock(key)
+
+def release_lock(key: str):
+    lock_manager.release_lock(key)

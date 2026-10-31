@@ -32,3 +32,6 @@ backend/*.db
 *.pyc
 
 .next/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

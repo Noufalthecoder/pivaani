@@ -120,6 +120,17 @@ export default function Demo() {
 
   // Voice & 7-Gate Live States
   const [soundboxSpeaking, setSoundboxSpeaking] = useState(false)
+  const [amountInput, setAmountInput] = useState('40') // customer-typed amount (₹)
+  const [paidAmount, setPaidAmount] = useState(40) // amount of the payment in flight / last paid
+  // The server's payment amount is the truth (after a reload, or a payment started elsewhere)
+  const syncAmount = useCallback((amount) => {
+    const n = Number(amount)
+    if (!(n > 0)) return
+    const rounded = Number.isInteger(n) ? n : Math.round(n * 100) / 100
+    setPaidAmount(rounded)
+    setAmountInput(String(Math.round(n)))
+  }, [])
+  const [speakingLang, setSpeakingLang] = useState('hi-IN') // language of the clip now playing
   const [soundboxBlocked, setSoundboxBlocked] = useState(false)
   const [gateResults, setGateResults] = useState({})
   // Firewall decision for gateResults: 'ALLOW' | 'NEEDS_APPROVAL' | 'HOLD' | 'BLOCK'
@@ -155,10 +166,13 @@ export default function Demo() {
         if (payments.length > 0) {
           const latest = payments[0]
           setCurrentPayment(latest)
+          syncAmount(latest.amount)
           if (latest.status === 'PENDING' || latest.status === 'DEBITED_NOT_CREDITED') {
             setPaymentStatus('PENDING')
           } else if (latest.status === 'SUCCESS') {
             setPaymentStatus('CONFIRMED')
+          } else if (latest.status === 'REFUNDED') {
+            setPaymentStatus('REFUNDED')
           }
         }
       }
@@ -187,6 +201,7 @@ export default function Demo() {
           status: payload.status,
           rrn: payload.rrn
         })
+        syncAmount(payload.amount)
         setPaymentStatus(payload.status === 'SUCCESS' ? 'CONFIRMED' : 'PENDING')
         setReceipt(null)
         setCustomerCaption(`Payment ${payload.payment_id} initiated. Awaiting bank acknowledgement...`)
@@ -266,6 +281,8 @@ export default function Demo() {
         break
 
       case 'STATE_RESET':
+        // The dial chip must always show what the firewall will actually use
+        if (payload.trust_dial) setDialMode(payload.trust_dial.charAt(0).toUpperCase() + payload.trust_dial.slice(1))
         stopSoundboxVoice()
         setSoundboxSpeaking(false)
         setSoundboxBlocked(false)
@@ -314,6 +331,7 @@ export default function Demo() {
             lang: payload.lang || 'hi-IN',
             onStart: () => {
               setCustomerCaption(`🔊 Soundbox ${speaker}: "${payload.text}"`)
+              setSpeakingLang(payload.lang || 'hi-IN')
               setSoundboxSpeaking(true)
               setSoundboxBlocked(Boolean(payload.blocked))
             },
@@ -358,16 +376,22 @@ export default function Demo() {
   // 4. API Action: Customer clicks Pay button
   const handleCustomerPay = async () => {
     if (paymentStatus === 'PROCESSING') return
+    const amount = parseInt(amountInput, 10)
+    if (!(amount >= 1 && amount <= 100000)) {
+      appendLog('system', 'Enter an amount between ₹1 and ₹1,00,000.')
+      return
+    }
+    setPaidAmount(amount)
 
     setPaymentStatus('PROCESSING')
     setCustomerCaption('Contacting UPI payment gateway...')
-    appendLog('customer', 'User tapped Pay ₹40')
+    appendLog('customer', `User tapped Pay ₹${amount}`)
 
     try {
       const res = await fetch(`${BACKEND_HTTP}/api/sandbox/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: 40, scenario: 'pending' })
+        body: JSON.stringify({ amount, scenario: 'pending' })
       })
       if (!res.ok) {
         throw new Error(`Server returned ${res.status}`)
@@ -419,7 +443,9 @@ export default function Demo() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_id: currentPayment?.id })
       })
-      if (!res.ok) {
+      if (res.status === 429) {
+        appendLog('firewall', '🔒 429 Concurrency Block: duplicate tap rejected while the first is processed')
+      } else if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         appendLog('system', `Retap: ${data.detail || res.statusText}`)
       }
@@ -521,21 +547,49 @@ export default function Demo() {
   }
 
   // 6e. Merchant command box / push-to-talk: map a Hindi, Tamil or English phrase to an action
-  const handleCommand = (raw) => {
-    const text = (raw || '').trim()
+  //     Any language: the word list catches common phrasings instantly; otherwise the phrase is
+  //     translated to English (Sarvam) and matched again.
+  const handleCommand = async (raw, english) => {
+    const text = toAsciiDigits((raw || '').trim())
     if (!text) return
     setCommandText('')
-    const t = text.toLowerCase()
-    if (/careful|saavdhan|सावधान|ध्यान|கவனம/.test(t)) return handleDialChange('Careful')
-    if (/balanced|normal|सामान्य|சமநிலை/.test(t)) return handleDialChange('Balanced')
-    if (/fast|jaldi|जल्दी|வேகம/.test(t)) return handleDialChange('Fast')
-    if (/refund|approve|wapas|vapas|रिफंड|वापस|मंजूर|मंज़ूर|ரீஃபண்ட|திருப்பி|ஒப்புத/.test(t)) {
-      // PIN = a 4-digit group, ignoring amounts like "₹40" or "Rs 40" (STT may space the digits)
-      const withoutAmounts = text.replace(/(₹|rs\.?|rupees?|रुपये|ரூபாய்)\s*\d+/gi, ' ')
-      const spokenPin = (withoutAmounts.match(/\d(?:\s?\d){3}/g) || []).pop()?.replace(/\s/g, '')
-      return handleApproveRefund(text, spokenPin || approvalPin)
+    if (runCommand(text, text)) return
+    if (english === undefined) {
+      try {
+        const res = await fetch(`${BACKEND_HTTP}/api/voice/translate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        })
+        english = res.ok ? (await res.json()).english : ''
+      } catch {
+        english = ''
+      }
     }
-    appendLog('system', `Command not understood: "${text}". Try "Refund kar do 4321" or "Careful rakho".`)
+    english = toAsciiDigits(english || '')
+    if (english && english !== text) {
+      appendLog('soundbox', `🌐 Understood as: "${english}"`)
+      if (runCommand(english, text)) return
+    }
+    appendLog('system', `Command not understood: "${text}". Try "Refund kar do 4321" or "Careful rakho" in any language.`)
+  }
+
+  // Returns true if the phrase was a dial or refund command (and acts on it)
+  const runCommand = (phrase, original) => {
+    const t = phrase.toLowerCase()
+    const dial = matchDialCommand(t)
+    if (dial) {
+      handleDialChange(dial)
+      return true
+    }
+    if (/refund|approve|give\b.*\bback|return\b.*\bmoney|money\b.*\bback|pay\b.*\bback|reimburse|wapas|vapas|रिफंड|वापस|मंजूर|मंज़ूर|ரீஃபண்ட|திருப்பி|ஒப்புத/.test(t)) {
+      // PIN = a 4-digit group, ignoring amounts like "₹40" or "Rs 40" (STT may space the digits)
+      const withoutAmounts = phrase.replace(/(₹|rs\.?|rupees?|रुपये|ரூபாய்)\s*\d+/gi, ' ')
+      const spokenPin = (withoutAmounts.match(/\d(?:\s?\d){3}/g) || []).pop()?.replace(/\s/g, '')
+      handleApproveRefund(original, spokenPin || approvalPin)
+      return true
+    }
+    return false
   }
 
   // Push-to-talk: Sarvam speech-to-text when the backend has a key, else the browser's recognizer
@@ -599,7 +653,7 @@ export default function Demo() {
       try {
         const form = new FormData()
         form.append('file', wav, 'speech.wav')
-        const res = await fetch(`${BACKEND_HTTP}/api/voice/stt?lang=${voiceLang}`, { method: 'POST', body: form })
+        const res = await fetch(`${BACKEND_HTTP}/api/voice/stt?lang=unknown`, { method: 'POST', body: form })
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data.transcript) {
           appendLog('system', `Speech not recognised (${data.detail || res.status}). Type the command instead.`)
@@ -607,7 +661,7 @@ export default function Demo() {
         }
         appendLog('soundbox', `🎙️ Heard (${data.language_code || voiceLang}): "${data.transcript}"`)
         setCommandText(data.transcript)
-        commandHandlerRef.current(data.transcript)
+        commandHandlerRef.current(data.transcript, data.english)
       } catch (err) {
         appendLog('system', `STT network error: ${err.message}`)
       }
@@ -645,15 +699,19 @@ export default function Demo() {
 
   // 8. API Action: Switch Trust Dial
   const handleDialChange = async (mode) => {
+    const previous = dialMode
     setDialMode(mode)
     try {
-      await fetch(`${BACKEND_HTTP}/api/merchant/dial`, {
+      const res = await fetch(`${BACKEND_HTTP}/api/merchant/dial`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trust_dial: mode.toLowerCase() })
       })
+      if (!res.ok) throw new Error(`server returned ${res.status}`)
     } catch (err) {
-      console.warn('Dial update offline:', err.message)
+      // Never show a dial the firewall is not using
+      setDialMode(previous)
+      appendLog('system', `Dial not changed (${err.message}). Still on ${previous}.`)
     }
   }
 
@@ -695,16 +753,16 @@ export default function Demo() {
     ? 'confirmed'
     : 'idle'
   const lcdMain = activeCase
-    ? `₹${activeCase.amount ?? 40}`
+    ? `₹${activeCase.amount ?? paidAmount}`
     : isMicPressed
     ? 'LISTEN'
     : paymentStatus === 'CONFIRMED'
-    ? '₹40 PAID'
+    ? `₹${paidAmount} PAID`
     : paymentStatus === 'REFUNDED'
-    ? '₹40 RFND'
+    ? `₹${paidAmount} RFND`
     : 'READY'
   const lcdSub = soundboxSpeaking
-    ? `Speaking · ${voiceLangLabel(voiceLang)}`
+    ? `Speaking · ${voiceLangLabel(speakingLang)}`
     : activeCase
     ? `${activeCase.id} · ${activeCase.status === 'AWAITING_APPROVAL' ? 'needs approval' : 'bank pending'}`
     : blockedByGate
@@ -782,6 +840,9 @@ export default function Demo() {
             soundboxSpeaking={soundboxSpeaking}
             caption={customerCaption}
             onPay={handleCustomerPay}
+            amountInput={amountInput}
+            onAmountChange={setAmountInput}
+            paidAmount={paidAmount}
             onRetap={handleRetap}
           />
         </section>
@@ -934,7 +995,7 @@ export default function Demo() {
                       <p className="text-[12px] text-amber-700">{activeCase.trigger_reason}</p>
                     </div>
                   </div>
-                  <span className="text-2xl font-black">₹{activeCase.amount ?? 40}</span>
+                  <span className="text-2xl font-black">₹{activeCase.amount ?? paidAmount}</span>
                 </div>
                 <p className="text-[12px] text-[#64748B]">Payer: {activeCase.payer_vpa || 'customer@upi'}</p>
 
@@ -1106,7 +1167,7 @@ export default function Demo() {
 
       <div
         className={`fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E4E8EF] rounded-t-3xl shadow-[0_-20px_50px_-20px_rgba(15,23,42,0.35)] transition-transform duration-300 ease-out ${
-          isDrawerOpen ? 'translate-y-0' : 'translate-y-full'
+          isDrawerOpen ? 'translate-y-0 visible' : 'translate-y-full invisible'
         }`}
       >
         <div className="max-w-[1400px] mx-auto p-6">
@@ -1142,7 +1203,7 @@ export default function Demo() {
             <ScenarioButton tone="red" title="Replay approval" hint="Reuses a spent nonce" onClick={() => handleTriggerAttack('replay_tap', 'Replay Old Approval')} />
             <ScenarioButton tone="red" title="₹9,999 drain" hint="Over the ₹5,000 ceiling" onClick={() => handleTriggerAttack('amount_bypass', 'Amount Limit Bypass')} />
             <ScenarioButton tone="red" title="Low confidence" hint="Recommender at 0.40" onClick={() => handleTriggerAttack('low_confidence', 'Low Confidence')} />
-            <ScenarioButton tone="red" title="Fraud ring" hint="4-merchant ring → review" onClick={() => handleTriggerAttack('fraud_ring', 'Fraud Ring Collusion')} />
+            <ScenarioButton tone="red" title="Fraud ring" hint="4-merchant ring → blocked" onClick={() => handleTriggerAttack('fraud_ring', 'Fraud Ring Collusion')} />
           </div>
         </div>
       </div>
@@ -1181,6 +1242,59 @@ function ScenarioButton({ title, hint, onClick, tone = 'neutral' }) {
       <span className="text-[11px] opacity-75 mt-0.5 leading-tight">{hint}</span>
     </button>
   )
+}
+
+// Trust-dial words across Indian languages: native words, romanised forms, and the English
+// word as STT writes it in each script ("केयरफुल", "கேர்ஃபுல்"). Careful is checked first.
+const DIAL_WORDS = {
+  Careful: [
+    'careful', 'caution', 'cautious', 'alert', 'vigilant', 'safe', 'secure', 'slow', 'strict', 'saavdhan', 'savdhan', 'dhyan', 'dhyaan', 'jagrat', 'jaagrat', 'kavanam', 'jagratha', 'hushaar', 'sambhal',
+    'सावधान', 'ध्यान', 'सतर्क', 'संभल', 'केयरफुल', 'केयरफ़ुल', 'धीरे', // Hindi / Marathi
+    'கவனம', 'ஜாக்கிரதை', 'கேர்ஃபுல்', 'கேர்புல்', 'மெதுவா', // Tamil
+    'జాగ్రత్త', 'కేర్ఫుల్', 'నెమ్మది', // Telugu
+    'ಜಾಗರೂಕ', 'ಹುಷಾರ್', 'ಕೇರ್ಫುಲ್', 'ನಿಧಾನ', // Kannada
+    'ശ്രദ്ധ', 'സൂക്ഷി', 'കെയർഫുൾ', 'പതുക്കെ', // Malayalam
+    'সাবধান', 'সতর্ক', 'কেয়ারফুল', 'ধীরে', // Bengali
+    'સાવધાન', 'ધ્યાન', 'કેરફુલ', 'ધીમે', // Gujarati
+    'ਸਾਵਧਾਨ', 'ਧਿਆਨ', 'ਕੇਅਰਫੁਲ', 'ਹੌਲੀ', // Punjabi
+    'ସାବଧାନ', 'ସତର୍କ', 'କେୟାରଫୁଲ' // Odia
+  ],
+  Balanced: [
+    'balanced', 'balance', 'normal', 'medium', 'moderate', 'regular', 'usual', 'default', 'saamanya', 'samanya', 'madhyam', 'samanilai',
+    'सामान्य', 'संतुलित', 'मध्यम', 'बैलेंस', 'नॉर्मल', 'नार्मल',
+    'சமநிலை', 'சாதாரண', 'பேலன்ஸ்', 'நார்மல்',
+    'సాధారణ', 'సమతుల్య', 'బ్యాలెన్స్', 'నార్మల్',
+    'ಸಾಮಾನ್ಯ', 'ಸಮತೋಲನ', 'ಬ್ಯಾಲೆನ್ಸ್', 'ನಾರ್ಮಲ್',
+    'സാധാരണ', 'സന്തുലിത', 'ബാലൻസ്', 'നോർമൽ',
+    'স্বাভাবিক', 'সাধারণ', 'ব্যালেন্স', 'নরমাল',
+    'સામાન્ય', 'સંતુલિત', 'બેલેન્સ', 'નોર્મલ',
+    'ਆਮ', 'ਸੰਤੁਲਿਤ', 'ਬੈਲੈਂਸ', 'ਨਾਰਮਲ',
+    'ସାଧାରଣ', 'ସନ୍ତୁଳିତ', 'ବାଲାନ୍ସ', 'ନର୍ମାଲ'
+  ],
+  Fast: [
+    'fast', 'quick', 'speed', 'hurry', 'rapid', 'faster', 'jaldi', 'jaldee', 'tez', 'vegam', 'tondara', 'bega', 'taratari', 'lavkar', 'jaldi',
+    'जल्दी', 'तेज़', 'तेज', 'फास्ट', 'फ़ास्ट', 'लवकर',
+    'வேகம', 'சீக்கிரம்', 'ஃபாஸ்ட்', 'பாஸ்ட்',
+    'వేగం', 'త్వరగా', 'ఫాస్ట్',
+    'ವೇಗ', 'ಬೇಗ', 'ಫಾಸ್ಟ್',
+    'വേഗം', 'വേഗത', 'ഫാസ്റ്റ്',
+    'তাড়াতাড়ি', 'দ্রুত', 'ফাস্ট',
+    'જલ્દી', 'ઝડપી', 'ફાસ્ટ',
+    'ਜਲਦੀ', 'ਤੇਜ਼', 'ਫਾਸਟ',
+    'ଶୀଘ୍ର', 'ଜଲଦି', 'ଫାଷ୍ଟ'
+  ]
+}
+
+// Native-script digits (४३२१, ৪৩২১, ൪...) -> 0-9, so spoken PINs work in any script
+function toAsciiDigits(s) {
+  return s.replace(/[०-९০-৯੦-੯૦-૯୦-୯௦-௯౦-౯೦-೯൦-൯]/g, (d) =>
+    String(((d.charCodeAt(0) & 0xf) + 10 - 6) % 10)
+  )
+}
+
+function matchDialCommand(text) {
+  const t = (text || '').toLowerCase().normalize('NFC')
+  return Object.keys(DIAL_WORDS).find((level) => DIAL_WORDS[level].some((w) => t.includes(w))) || null
 }
 
 function voiceLangLabel(code) {

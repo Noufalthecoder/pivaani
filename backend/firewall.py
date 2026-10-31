@@ -42,8 +42,12 @@ def evaluate_seven_gates(
     gates: Dict[str, Dict[str, str]] = {}
     refund_amount = float(recommendation.get("refund_amount", payment.amount) or 0)
 
-    # 1. Authority: who is asking, and who is approving
-    if not merchant or not merchant.vpa:
+    fraud_ring = fraud_detector.is_flagged(payment.payer_vpa)
+
+    # 1. Authority: who is asking, and who is approving (a fraud-ring payer has no authority)
+    if fraud_ring:
+        gates["Authority"] = {"status": "FAILED", "reason": "Graph Alert: Collusive Fraud Ring Detected"}
+    elif not merchant or not merchant.vpa:
         gates["Authority"] = {"status": "FAILED", "reason": "Unverified merchant origin"}
     elif actor not in TRUSTED_ACTORS:
         gates["Authority"] = {"status": "FAILED", "reason": f"'{actor}' is not allowed to issue money actions"}
@@ -71,9 +75,9 @@ def evaluate_seven_gates(
     else:
         gates["Confidence"] = {"status": "FAILED", "reason": f"Recommender confidence {confidence:.2f} < {policy.min_confidence:.2f}"}
 
-    # 4. Identity: fraud-ring links route to manual review instead of punishing the customer
-    if fraud_detector.is_flagged(payment.payer_vpa):
-        gates["Identity"] = {"status": "REVIEW", "reason": f"{payment.payer_vpa} linked to a fraud-ring pattern: manual review"}
+    # 4. Identity: the payer VPA's place in the customer-merchant graph
+    if fraud_ring:
+        gates["Identity"] = {"status": "FAILED", "reason": f"{payment.payer_vpa} linked to stuck payments at >3 merchants in 5 min"}
     else:
         gates["Identity"] = {"status": "PASSED", "reason": f"Payer identity verified: {payment.payer_vpa}"}
 

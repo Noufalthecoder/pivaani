@@ -15,6 +15,7 @@ from events import manager, broadcast, start_event_dispatcher, stop_event_dispat
 from cases import start_case_monitor, stop_case_monitor, ACTIVE_CASE_STATUSES
 from security import hash_pin, is_pin_hashed, nonce_store, pin_limiter
 from fraud_graph import fraud_detector
+from locks import lock_manager
 from routers.sandbox_api import router as sandbox_router
 from routers.attack_api import router as attack_router
 from routers.voice_api import router as voice_router
@@ -187,7 +188,7 @@ async def reset_state(db: Session = Depends(get_db)):
     Resets the sandbox database state back to initial seed baseline:
     - Clears cases, actions and payments. The audit chain is append-only and is kept;
       the reset itself is recorded in it.
-    - Resets Merchant 'Ravi' trust dial to 'balanced' and PIN to '4321'.
+    - Resets Merchant 'Ravi' PIN to '4321' (the trust dial is kept).
     - Records state reset into audit hash chain.
     - Broadcasts reset to connected WebSockets.
     """
@@ -200,13 +201,14 @@ async def reset_state(db: Session = Depends(get_db)):
 
         # Reset in-memory fraud graph, approval nonces and PIN lockouts
         fraud_detector.reset()
+        lock_manager.reset()
         nonce_store.reset()
         pin_limiter.reset()
 
         # Reset or re-create Merchant Ravi
         merchant = db.query(Merchant).filter(Merchant.name == settings.DEFAULT_MERCHANT_NAME).first()
         if merchant:
-            merchant.trust_dial = settings.DEFAULT_TRUST_DIAL
+            # The trust dial is the merchant's own setting: a sandbox reset keeps it
             merchant.pin = hash_pin(settings.DEFAULT_MERCHANT_PIN)
             db.commit()
             db.refresh(merchant)
