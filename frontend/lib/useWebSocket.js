@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { BACKEND_WS } from './backend'
 
 // onMessage is called synchronously for every frame. Prefer it over lastMessage:
 // bursts (e.g. CASE_OPENED + two SPEAKs) can collapse into one React render,
 // and lastMessage would then only expose the final event.
-export function useWebSocket(url = 'ws://localhost:8000/ws', { onMessage } = {}) {
+export function useWebSocket(url = BACKEND_WS, { onMessage } = {}) {
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState(null)
   const socketRef = useRef(null)

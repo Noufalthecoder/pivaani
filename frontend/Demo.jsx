@@ -21,8 +21,8 @@ import { playSoundboxVoice, stopSoundboxVoice } from '@/src/speech'
 import MerchantPanel from '@/components/MerchantPanel'
 import CustomerPhone from '@/components/CustomerPhone'
 import Soundbox from '@/components/Soundbox'
+import { BACKEND_HTTP, BACKEND_WS } from '@/lib/backend'
 
-const BACKEND_HTTP = 'http://localhost:8000'
 
 const VOICE_LANGUAGES = [
   { code: 'hi-IN', label: 'हिंदी' },
@@ -356,7 +356,7 @@ export default function Demo() {
   }, [appendLog])
 
   // Real-time WebSocket connection
-  const { isConnected } = useWebSocket('ws://localhost:8000/ws', { onMessage: handleSocketEvent })
+  const { isConnected } = useWebSocket(BACKEND_WS, { onMessage: handleSocketEvent })
 
   // 3. Keyboard listener for 'C' to toggle Drawer
   useEffect(() => {

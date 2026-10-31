@@ -9,7 +9,7 @@
  * and the second must not cut off the first.
  */
 
-const BACKEND_BASE = 'http://localhost:8000'
+import { BACKEND_HTTP as BACKEND_BASE } from '../lib/backend'
 
 const queue = []
 let isPlaying = false
